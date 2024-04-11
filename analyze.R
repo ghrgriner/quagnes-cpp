@@ -1,0 +1,213 @@
+#------------------------------------------------------------------------------
+# File: analyze.R
+# Author: Ray Griner
+# Date: 30-Mar-2024
+# Purpose: analyze.R was used to generate the statistical results put in the
+#   README.md for v0.8.2. This cleans up the file a bit and reruns pointing
+#   to the new C++ directory location for the files used as input. It 
+#   generates the same results.
+# [RG20240331] - correct Wolter results to 45/1000000 instead of 14/1000000.
+#   This doesn't change any conclusions.
+#------------------------------------------------------------------------------
+# Need Hmisc for binconf
+library(Hmisc)
+
+#----------------------------------------------------------------------------- 
+# Purpose: Report the win rate, 95% CI, and calculate statistical tests
+#   for comparison with Masten and Wolter
+# Parameters:
+#     x: numerator of proportion
+#     n: denominator of proportion
+#     emptyrule: rule for how empty piles are handled so we know which 
+#         external proportion to compare to
+#----------------------------------------------------------------------------- 
+check.prob <- function(x, n, emptyrule) {
+    cat(paste0("Wins: ", x, "\n"))
+    cat(paste0("Win rate and 95% CI:\n"))
+    binconf.rc = binconf(x=x, n=n)
+    print(binconf.rc)
+
+    fisher_exact <- NULL
+    if (is.null(emptyrule)) emptyrule="do not test"
+
+    if (emptyrule == "high run") {
+        masten_test = prop.test(x=c(x, 14498), n=c(n, 100000))
+        cat("\nTest this and Masten proportions equal:\n")
+        print(masten_test)
+    }
+    if (emptyrule == "any run") {
+        masten_test = prop.test(x=c(x, 63635), n=c(n, 100000))
+        cat("\nTest this and Masten proportions equal:\n")
+        print(masten_test)
+    }
+    if (emptyrule == "none") {
+        masten_test = prop.test(x=c(x, 900), n=c(n, 100000))
+        cat("\nTest this and Masten proportions equal:\n")
+        print(masten_test)
+        wolter_test = prop.test(x=c(x, 45), n=c(n, 1000000))
+        cat("\n\nTest this and Wolter proportions equal:\n")
+        print(wolter_test)
+
+        # yes, Barnard's is more powerful, etc..., but for now I
+        # just want to use something in the stats library vs having
+        # to validate something by an unknown author
+        cat("\n\nFisher exact test in case above doesn't converge:\n")
+        cont.table = matrix(data=c(x, 45, n-x, 1000000-45), nrow=2, ncol=2)
+        fisher_exact = prop.test(x=cont.table)
+        print(cont.table)
+        print(fisher_exact)
+        cat("\n")
+    }
+    return (list(binconf = binconf.rc, masten_test = masten_test,
+        fisher_exact = fisher_exact))
+}
+
+fmt.pval <- function(p.value) {
+    return (ifelse(p.value < .0001, "<.0001",
+        ifelse(p.value<.001, sprintf("%6.4f", p.value),
+            ifelse(p.value<.01, sprintf("%5.3f", p.value),
+                sprintf("%4.2f", p.value)))))
+}
+
+analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL, 
+                    rule_footnote = NULL) {
+    if (!is.null(file) && !file.exists(file)) {
+        stop(paste("analyze: file does not exist: ", file))
+    }
+
+    cat("-----------------------------------------------")
+    cat("------------------------------\n")
+    if (!is.null(file)) cat(paste0("File: ", file, "\n"))
+    if (!is.null(data)) cat(paste0("Data: ", file, "\n"))
+    cat("-----------------------------------------------")
+    cat("------------------------------\n\n")
+
+    if ( (is.null(file) & is.null(data)) || (!is.null(file) & !is.null(data))) {
+        stop("analyze: either file or data parameter must be specified")
+    }
+
+    if (is.null(data)) {
+        df <- read.csv(file)
+    } else {
+        df <- data
+    }
+
+    n.total <- nrow(df)
+    is.completed <- ( (df$rc == 1) | (df$rc == 2))
+    n.completed <- sum( is.completed, na.rm=TRUE)
+    
+    # Print number of completed simulations
+    cat(paste0("Observations (n): ", n.total, "\n"))
+    comp.df <- df[(df$rc == 1) | (df$rc == 2),]
+    cat(paste0("Simulation completed (n): ", n.completed, "\n\n"))
+
+    #
+    if (is.null(rule_footnote)) {
+       marker=""
+    } else {
+       marker=paste0(" [", rule_footnote, "]")
+    }
+
+    to_output(paste0("| ", formatC(paste0("*",rule,"*", marker), width=-26), " "))
+    to_output(paste0("| ", formatC(format(n.completed, big.mark=",",
+                                   trim=TRUE), width=7),
+                     "     "))
+
+
+    # Print win rates, 95% CIs, and p-values
+    to_output("| ")
+    if (n.total == n.completed) {
+        ret = check.prob(x=sum( (df$rc == 1), na.rm=TRUE),
+                   n=n.completed, emptyrule=emptyrule)
+        out_str = sprintf("%d (%2.1f%% [%2.1f%%, %2.1f%%])",
+            sum( (df$rc == 1), na.rm=TRUE),
+            100*ret$binconf[1, "PointEst"],
+            100*ret$binconf[1, "Lower"],
+            100*ret$binconf[1, "Upper"])
+
+        to_output(paste0(formatC(out_str, width=-28), " "))
+        to_output(paste0("| ",
+            formatC(fmt.pval(ret$masten_test$p.value), width=-6), " "))
+    }
+    else {
+        cat(paste0("\nWARNING: Some simulations stopped before completion.\n"))
+        cat(paste0("\nAssuming all incomplete simlations are losses:\n"))
+        ret.low <- check.prob(x=sum( (df$rc == 1), na.rm=TRUE),
+                   n=n.completed, emptyrule=emptyrule)
+        print(ret.low)
+        cat(paste0("\nAssuming all incomplete simlations are wins:\n"))
+        ret.high <- check.prob(x=sum( (df$rc == 1) | (df$rc == 3), na.rm=TRUE),
+                   n=n.completed, emptyrule=emptyrule)
+        print(ret.high)
+
+        out_str = sprintf("%d (%2.1f%% [%2.1f%%, %2.1f%%], %2.1f%% [%2.1f%%, %2.1f%%])",
+            sum( (df$rc == 1), na.rm=TRUE),
+            100*ret.low$binconf[1, "PointEst"],
+            100*ret.low$binconf[1, "Lower"],
+            100*ret.low$binconf[1, "Upper"],
+            100*ret.high$binconf[1, "PointEst"],
+            100*ret.high$binconf[1, "Lower"],
+            100*ret.high$binconf[1, "Upper"])
+        to_output(paste0(formatC(out_str, width=-28), " "))
+        to_output(paste0("| ",
+            fmt.pval(ret.low$masten_test$p.value), ", ",
+            fmt.pval(ret.high$masten_test$p.value), " "))
+    }
+    
+    stchk = df$n_states_checked
+    cat("\nStates checked:\n")
+    cat(paste0("Mean (SD): ", mean(stchk), " (", sd(stchk), ")\n"))
+    cat(paste0("Max: ", max(stchk), "\n"))
+    # Print mean (sd) states examined
+    out_str = sprintf("| %.1f (%.1f) ", mean(stchk)/1000, sd(stchk)/1000)
+    to_output(formatC(out_str, width=-20))
+    out_str = sprintf("| %.1f", max(stchk)/1000000)
+    to_output(formatC(out_str, width=-10))
+
+    to_output("|\n")
+    #print(df)
+}
+
+output.file = "analysis_output.txt"
+
+to_output <- function(str_to_print) {
+    cat(str_to_print, file=output.file, append=TRUE)
+}
+
+print_table_header <- function() {
+    to_output("Output Summary for Pasting in README.md:\n\n")
+    to_output("| Rule Variant               | Completed Simulations, (n) |")
+    to_output(" Wins, n (% [95% CI]) [a] | P-value [b] |")
+    to_output(" Mean (SD) States Examined (10^3) |")
+    to_output(" Maximum States Examined (10^6) |\n")
+
+    to_output("| :------------------------- | :---------: |")
+    to_output(" :-------------------------: | :-----: | :---------------: |")
+    to_output(" :-----: |\n")
+}
+
+cat("", file=output.file)
+print_table_header()
+
+dir = "tests/"
+df.dalton_anyrun_part1 = read.csv(paste0(dir, "dalton_anyrun.out")) 
+df.dalton_anyrun_part2 = read.csv(paste0(dir, "dalton_anyrun_part2.out")) 
+df.dalton_anyrun_part3 = read.csv(paste0(dir, "dalton_anyrun_part3.out")) 
+df.dalton_anyrun= rbind(df.dalton_anyrun_part1,
+                        df.dalton_anyrun_part2,
+                        df.dalton_anyrun_part3)
+
+analyze(file=paste0(dir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None")
+analyze(file=paste0(dir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None")
+analyze(file=paste0(dir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit")
+analyze(file=paste0(dir, "up_color_highrun.out"),         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="c")
+analyze(file=paste0(dir, "up_color_highrun_nosplit.out"), emptyrule="high run", rule="Up-Color-HighRun-NoSplit")
+analyze(file=paste0(dir, "up_color_anyrun.out"),          emptyrule="none",     rule="Up-Color-AnyRun", rule_footnote="d")
+analyze(file=paste0(dir, "up_color_anyrun_nosplit.out"),  emptyrule="none",     rule="Up-Color-AnyRun-NoSplit")
+analyze(file=paste0(dir, "dalton_none.out"),              emptyrule="none",     rule="Up-Suit-None")
+analyze(file=paste0(dir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit")
+analyze(file=paste0(dir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
+analyze(file=paste0(dir, "dalton_highrun_nosplit.out"),   emptyrule="high run", rule="Up-Suit-HighRun-NoSplit")
+analyze(data=df.dalton_anyrun,                            emptyrule="any run",  rule="Up-Suit-AnyRun")
+analyze(file=paste0(dir, "dalton_anyrun_nosplit.out"),    emptyrule="any run",  rule="Up-Suit-AnyRun-NoSplit")
+
