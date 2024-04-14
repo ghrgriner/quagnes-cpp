@@ -21,11 +21,16 @@
 // Author: Ray Griner
 // Purpose: Agnes class and related functions
 // Changes:
+// 20240411RG: (1) Add call to new SetLastCards function after initializing deck
+// (2) Pass enum_to_empty_pile parameter to all functions that do or undo moves
+// as it is needed by AgnesState.set_sort_order. (3) Add assert to check that
+// a string is in the check_loops set before we erase it.
 //------------------------------------------------------------------------------
 
 #include <iostream>
 #include <fstream>
 #include <random>
+#include <cassert>
 #include <algorithm>
 
 #include "Agnes.h"
@@ -153,6 +158,7 @@ int Agnes::Play() {
     if (deck_[i].rank < 0) deck_[i].rank += N_RANK;
     deck_[i].suit=initial_deck_[i].suit;
   }
+  curr_state_.SetLastCards(deck_);
 
   curr_state_.PlayBaseCard(deck_[0]);
   score_ = 1;
@@ -290,7 +296,10 @@ void Agnes::UndoMove(const bool &no_print) {
 
   if (check_for_loops_) {
     if (!curr_state_.is_loop()) {
-      check_loops_.erase(curr_state_.hash());
+      auto it = check_loops_.find(curr_state_.hash());
+      assert(it != check_loops_.end());
+      check_loops_.erase(it);
+      //check_loops_.erase(curr_state_.hash());
     }
   }
   curr_state_.set_is_loop(false);
@@ -298,13 +307,13 @@ void Agnes::UndoMove(const bool &no_print) {
 
   if (curr_move.movetype == Moves::ToFoundation) {
     --score_;
-    curr_state_.UndoMoveToFoundation(curr_move, snm_opts);
+    curr_state_.UndoMoveToFoundation(curr_move, snm_opts, enum_to_empty_pile_);
   }
   else if (curr_move.movetype == Moves::Deal) {
-    curr_state_.UndoDeal(snm_opts);
+    curr_state_.UndoDeal(snm_opts, enum_to_empty_pile_);
   }
   else if (curr_move.movetype == Moves::InTableau) {
-    curr_state_.UndoTableauMove(curr_move, snm_opts);
+    curr_state_.UndoTableauMove(curr_move, snm_opts, enum_to_empty_pile_);
   }
 
   curr_state_.UpdateHash();
@@ -368,19 +377,21 @@ int Agnes::PerformMove()
     if (curr_move.movetype == Moves::ToFoundation) {
       ++n_move_to_foundation_;
       ++score_;
-      curr_state_.MoveToFoundation(curr_move, last_move_info, snm_opts);
+      curr_state_.MoveToFoundation(curr_move, last_move_info, snm_opts,
+                                   enum_to_empty_pile_);
       if (score_ > max_score_) max_score_ = score_;
     }
     else if (curr_move.movetype == Moves::Deal) {
       ++n_deal_;
-      curr_state_.DealMove(deck_, last_move_info, snm_opts);
+      curr_state_.DealMove(deck_, last_move_info, snm_opts, enum_to_empty_pile_);
       if (enum_to_empty_pile_ == EmptyRule::None && !maximize_score_) {
         any_pile_blocked = curr_state_.IsAnyPileBlocked();
       }
     }
     else if (curr_move.movetype == Moves::InTableau) {
       ++n_move_card_in_tableau_;
-      curr_state_.TableauMove(curr_move, last_move_info, snm_opts);
+      curr_state_.TableauMove(curr_move, last_move_info, snm_opts,
+                              enum_to_empty_pile_);
     }
 
     curr_state_.UpdateHash();

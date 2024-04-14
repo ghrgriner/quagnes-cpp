@@ -26,6 +26,9 @@
 //    decks/dN to decks/oN and make first file deck1.txt instead of deck0.txt.
 //    (2) Rename file to quagnes.cpp. (3) Change -a parameter to -k parameter
 //    and do not output skipped simulations.
+// [20240413] - Fix print_usage function. '-h' option was giving an error rather
+// than printing help message, lengthen other messages, and remove one or two
+// incorrect options from the message.
 //------------------------------------------------------------------------------
 
 #include <unistd.h>
@@ -44,24 +47,26 @@ using std::string;
 void print_usage();
 
 void print_usage() {
-    std::cerr << "Usage: ./quagnes -n reps [-e empty] [-u] [-s] [-i] [-z] ";
-    std::cerr << "[-t int] [-p] [-f] [-m int] [-k int]\n";
-    std::cerr << "    -n reps (int): number of simulations\n";
-    std::cerr << "    -e empty: pass to move_to_empty_pile parameter\n";
-    std::cerr << "    -u: set move_same_suit=true\n";
-    std::cerr << "    -s: set split_runs=false\n";
-    std::cerr << "    -t int: set track_threshold parameter\n";
-    std::cerr << "    -p: set print_states=true\n";
-    std::cerr << "    -f: set face_up=true\n";
-    std::cerr << "    -z: set maximize_score=true\n";
-    std::cerr << "    -i: set print_states=true\n";
+    std::cerr << "Usage: ./quagnes -n reps [-k n_to_skip] [-e empty] [-u] [-s]";
+    std::cerr << "[-t threshold] [-p] [-f] [-z] [-m n_states] [-h]\n";
+    std::cerr << "    -n reps: execute the first reps simulations (except those skipped by the -k parameter)\n";
     std::cerr << "    -k n_to_skip (int): skip first n_to_skip simulations\n";
-    std::cerr << "    -m int: set max_states parameter\n";
+    std::cerr << "    -e empty: define what can be moved to empty tableau piles: {'none', 'high run', 'any run', 'high 1', 'any 1'}\n";
+    std::cerr << "    -u: move runs by suit instead of by color\n";
+    std::cerr << "    -s: do not allow movable runs to be split\n";
+    std::cerr << "    -t threshold: track losing states in a set until the number of cards in the stock is less than threshold (default=0)\n";
+    std::cerr << "    -p: print state as each move is performed or undone\n";
+    std::cerr << "    -f: deal all tableau cards face-up instead of just the last card in each column\n";
+    std::cerr << "    -z: maximize score by disabling identification of losing games without playing moves (used when '-e none' is specified)\n";
+    std::cerr << "    -m n_states: stop processing game after n_states states\n";
+    std::cerr << "    -r rerun_file: rerun simulations with return code 3 in rerun_file\n";
+    std::cerr << "    -h: print this help message\n";
 }
 
 int main(int argc, char *argv[]) {
     int n_reps = 0;
     char deck_filename_cp[DECK_FILENAME_LEN];
+    string rerun_filename;
     quagnes::AgnesOptions agnes_options;
     int n_to_skip = 0;
 
@@ -91,6 +96,11 @@ int main(int argc, char *argv[]) {
             agnes_options.face_up = true;
             continue;
 
+        case 'h':
+            print_usage();
+            return 1;
+            continue;
+
         case 'p':
             agnes_options.print_states = true;
             continue;
@@ -109,7 +119,6 @@ int main(int argc, char *argv[]) {
             continue;
 
         case '?':
-        case 'h':
         default :
             print_usage();
             return 1;

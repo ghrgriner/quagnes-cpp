@@ -1,0 +1,11 @@
+*.o
+quagnes
+obj
+bin
+tests
+notgit
+Rules*md
+Program*md
+R/*.Rout
+R/analysis_output.txt
+RELEASE_NOTES.txt

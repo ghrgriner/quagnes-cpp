@@ -21,12 +21,34 @@
 // Author: Ray Griner
 // Purpose: AgnesState class and related functions
 // Changes:
+// [20240413RG] (1) Add IsDealForced to force deals when stock has two cards
+//   left and the cards we are waiting for can immediately be placed to the
+//   foundation. Also SetLastCards function to set values of lower_last and
+//   upper_last which at least for now needs to be done after deck
+//   initialization. (2) The last_in_pile variable doesn't consider that the
+//   next higher card of the same-color suit might be above the pile we are
+//   moving (in which case we should force it just like for last_in_pile).
+//   Add src_is_next_suit_seq flag to handle this case. (3) Bug fix:
+//   set_n_movable. When move_same_suit, we should only allow split if the last
+//   card in the pile being moved isn't needed to hold the next suit (so we
+//   check whether Card(last_card.rank-1, next_suit) is in the foundation or
+//   can be forced to foundation.
+//   (4) set_valid_moves: remove logic that did not allow splitting same-suit
+//   when the empty piles would not be covered by a future deal. This is
+//   incorrect when `move_same_suit = True` and already implemented in
+//   `set_n_movable` when `move_same_suit = False`.
+//   (5) Sort piles that cannot be covered by a future deal. For example, if
+//   the stock is empty, and we switch what is in piles (3) and (4), the same
+//   score must be obtained.
+//   (6) Add assert statements to beginning of the 6 functions that do moves
+//   and unmoves.
 //------------------------------------------------------------------------------
 
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <algorithm>
+#include <cassert>
 
 #include "AgnesState.h"
 
@@ -135,15 +157,30 @@ AgnesState::AgnesState()
   for (std::size_t i=0; i<foundation_.size(); ++i) {
     foundation_[i]=-1;
   }
-  //for (std::size_t i=0; i<sort_order_.size(); ++i) {
-  //  sort_order_[i] = i;
-  //}
+  for (std::size_t i=0; i<sort_order_.size(); ++i) {
+    sort_order_[i] = i;
+  }
   for (int i=0; i<N_RANK; ++i) {
     for (int j=0; j<N_SUIT; ++j) {
       in_suit_seq_[i][j] = false;
       last_in_pile_[i][j] = false;
     }
   }
+}
+
+void AgnesState::SetLastCards(const std::array<Card, N_CARD> & deck) {
+  // no need to keep the last two cards in order here and it's better
+  if (deck[N_CARD-1].rank < deck[N_CARD-2].rank) {
+    lower_last_ = deck[N_CARD-1];
+    upper_last_ = deck[N_CARD-2];
+  } else {
+    lower_last_ = deck[N_CARD-2];
+    upper_last_ = deck[N_CARD-1];
+  }
+  last_same_suit_seq_ = (lower_last_.suit == upper_last_.suit
+      && lower_last_.rank + 1 == upper_last_.rank);
+  last_same_color_not_suit_ = (lower_last_.suit
+                               == upper_last_.same_color_suit());
 }
 
 // Getters and simple setters
@@ -231,7 +268,10 @@ void AgnesState::UpdateHash() {
   std::ostringstream retoss;
 
   retoss << (n_stock_left_);
-  for (const AgnesPile& pile : piles_) {
+  for (PileSizeType pile_index=0; pile_index<N_PILE; ++pile_index) {
+    //for (const AgnesPile& pile : piles_) {
+    AgnesPile& pile = piles_[sort_order_[pile_index]];
+    //AgnesPile& pile = piles_[pile_index];
     retoss << "#";
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
       retoss << std::to_string(48+(it->suit)*N_RANK+(it->rank));
@@ -332,10 +372,13 @@ void AgnesState::set_n_movable(const int pile_index,
 
         // But... we should also never split between two suits in
         // sequence when the stock is 0 and split_empty_stock=false.
-        // run (regardless of whether we are moving by suit or color)
-        if (!(n_stock_left_) && !snm_opts.split_empty_stock
-          && is_split_same_suit) continue;
-
+        // (1) when we are moving by suit, we can do it as long as we can be
+        // sure we won't need to move the other suit onto the pile
+        // (but we won't check that here)
+        // (2) when moving by color, never need to split runs
+        if (!(n_stock_left_)
+          && !snm_opts.split_empty_stock
+          && ((!snm_opts.move_same_suit && is_split_same_suit))) continue;
         n_movable.push_back( (max_index - card_index) + 1);
       }
     }
@@ -359,6 +402,55 @@ static bool IsLastDealBlocked(const array<LastMoveInfo,
   return false;
 }
 
+// If there are no cards left in the stock we force moves to the foundation
+// if we don't need an exposed card as a target for a move (ie, if the
+// card in the same color suit that is one rank lower is already in the
+// foundation or in sequence under the same suit). This extends that concept
+// to the last deal. If the last deal would result in both cards being
+// immediately forced to the foundation, we also force the deal.
+bool AgnesState::IsDealForced(bool split_empty_stock) {
+  // We already sorted the last two cards so that lower_last_ <= upper_last_
+  const Card & card1 = lower_last_;
+  const Card & card2 = upper_last_;
+  if (n_stock_left_ != 2) return false;
+  else {
+     bool can_put1 = false;
+     bool can_put2 = false;
+     // Make sure we can put both the cards in the foundation. Usually it just
+     // means checking the (rank -1) card is in the foundation, but we
+     // also handle the unlikely case that the last 2 cards are in sequence
+     if (last_same_suit_seq_) {
+         can_put1 = InFoundation(card1.rank - 1, card1.suit);
+         can_put2 = can_put1;
+     }
+     else {
+         can_put1 = InFoundation(card1.rank - 1, card1.suit);
+         can_put2 = InFoundation(card2.rank - 1, card2.suit);
+     }
+
+     bool card1_forcable = (can_put1
+         && (InFoundation(card1.rank - 2, card1.same_color_suit())
+                 || (!split_empty_stock
+                     && in_suit_seq_[card1.rank - 1][
+                                     card1.same_color_suit()])));
+     bool card2_forcable = (can_put2
+             && (InFoundation(card2.rank - 2, card2.same_color_suit())
+                 || (!split_empty_stock
+                     && in_suit_seq_[card2.rank - 1][
+                                     card2.same_color_suit()])));
+     if (card1_forcable && card2_forcable) {
+       return true;
+     }
+     else if (!last_same_color_not_suit_
+              || (!card1_forcable && !card2_forcable)) return false;
+     else if (card1_forcable && can_put2
+             && (InFoundation(card2.rank - 3, card1.suit))) return true;
+     else if (card2_forcable && can_put1
+             && (InFoundation(card1.rank - 3, card2.suit))) return true;
+     else return false;
+  }
+}
+
 void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
       const bool move_same_suit,
       const bool split_empty_stock,
@@ -377,15 +469,23 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
            || !IsLastDealBlocked(last_move_info)))) {
     reg_move = Move(Moves::Deal, 0, 0, 0, 0, false, TablType::None);
     valid_moves_.push_back( reg_move );
+    if (IsDealForced(split_empty_stock)) {
+      force_move = true;
+      forced_move = Move(Moves::Deal, 0, 0, 0, 0, false, TablType::None);
+    }
   }
 
   for (PileSizeType pile_index=0; pile_index<piles_.size(); ++pile_index) {
     bool expose = false;
     std::vector<int>& n_movable = piles_[pile_index].n_movable;
     int len_curr_pile = piles_[pile_index].exposed.size();
+    if (!len_curr_pile) continue;
+    const Card &last_card = piles_[pile_index].exposed[len_curr_pile - 1];
+
     TablType tabltype = TablType::None;
     for (const int& n_to_move : n_movable) {
       tabltype = TablType::None;
+      bool src_in_next_suit_seq = false;
       const Card &src_card = piles_[pile_index].exposed[
           len_curr_pile - n_to_move];
       if (n_to_move == len_curr_pile) {
@@ -398,6 +498,10 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
         if (src_card.rank + 1 == card_above.rank
             && src_card.suit == card_above.suit) {
           tabltype = TablType::Split;
+        }
+        if (src_card.rank + 1 == card_above.rank
+            && src_card.same_color_suit() == card_above.suit) {
+          src_in_next_suit_seq = true;
         }
       }
 
@@ -444,9 +548,16 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
                || ((move_to_empty_pile == EmptyRule::AnyRun
                 || (move_to_empty_pile == EmptyRule::HighRun
                   && src_card.rank == 12))))) {
-          if (pile_index < n_stock_left_ || tgt_index < n_stock_left_
+
+          if (n_stock_left_
               || tabltype != TablType::Split || split_empty_stock
-              || foundation_[((src_card.suit + 2) % 4)] < src_card.rank) {
+              || !(InFoundation(last_card.rank - 1,
+                               last_card.same_color_suit())
+                    ||
+                  (InFoundation(last_card.rank - 2,
+                               last_card.same_color_suit())
+                   && InFoundation(last_card.rank - 3,
+                               last_card.suit)))) {
             reg_move = Move(Moves::InTableau, pile_index, src_card.suit,
               n_to_move, tgt_index, expose, tabltype);
             valid_moves_.push_back(reg_move);
@@ -458,29 +569,38 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
           if (src_card.suit == tgt_card.suit) {
             tabltype = TablType::Join;
           }
-          if (pile_index < n_stock_left_ || tgt_index < n_stock_left_
+
+          if (n_stock_left_
               || tabltype != TablType::Split || split_empty_stock
-              || foundation_[((src_card.suit + 2) % 4)] < src_card.rank) {
+              || !(InFoundation(last_card.rank - 1,
+                               last_card.same_color_suit())
+                    ||
+                  (InFoundation(last_card.rank - 2,
+                               last_card.same_color_suit())
+                   && InFoundation(last_card.rank - 3,
+                               last_card.suit)))) {
             reg_move = Move(Moves::InTableau, pile_index, src_card.suit,
                 n_to_move, tgt_index, expose, tabltype);
             valid_moves_.push_back(reg_move);
           }
-          // if there's no stock left, force move under the same suit,
-          // as long as !split_empty_stock and same-color suit
-          // equal-ranked card is already in sequence or in the
-          // foundation
+
+          // TODO:
+          // These are the conditions under which we can force a move in the
+          // tableau between cards of the same suit. We could probably be a bit
+          // more aggressive in the case of move_same_suit (ie,
+          // move_same_suit && next-suit src card in suit seq &&
+          // Card(src_card.rank - 1, same suit) in foundation at least, but
+          // probably more aggressive still. May be done in future
           if (!(n_stock_left_)
             && !split_empty_stock && tgt_card.suit == src_card.suit
-            && ( foundation_[(src_card.suit + 2) % 4] + 1
-               >= src_card.rank
+            && ( InFoundation(src_card.rank, src_card.same_color_suit())
               || (!move_same_suit
-                 && ( in_suit_seq_[src_card.rank][
-                     ((src_card.suit + 2) % 4)]
+                 && ( in_suit_seq_[src_card.rank][src_card.same_color_suit()]
                     || (src_card.rank<12
-                      && last_in_pile_[
-                        src_card.rank + 1][
-                        ((src_card.suit + 2) % 4)] ))))) {
-            force_move=true;
+                      && (last_in_pile_[src_card.rank + 1][
+                                        src_card.same_color_suit()]
+                          || src_in_next_suit_seq)))))) {
+            force_move = true;
             forced_move = Move(Moves::InTableau, pile_index,
                 src_card.suit, n_to_move, tgt_index, expose,
                 tabltype);
@@ -489,38 +609,33 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
       } // for tgt_index
     } // loop over n_movable
 
-    if (len_curr_pile) {
-      // Move Type 2 - Put card onto foundation
-      //p_last_card = &(piles_[pile_index].exposed[len_curr_pile-1]);
-      expose = (len_curr_pile == 1
-            && piles_[pile_index].hidden.size());
-      const Card &last_card =
-          (piles_[pile_index].exposed[len_curr_pile-1]);
-      int suit = last_card.suit;
-      if ((last_card.rank-1) == foundation_[suit]
-        && (track_threshold <= n_stock_left_
-          || !last_move_info[pile_index].depth
-          || last_move_info[pile_index].can_move_to_found)) {
-        if (in_suit_seq_[last_card.rank][last_card.suit]) {
-          tabltype = TablType::Split;
-        }
-        else {
-          tabltype = TablType::None;
-        }
-        reg_move = Move(Moves::ToFoundation, pile_index, suit,
-                        0, 0, expose, tabltype);
-        valid_moves_.push_back(reg_move);
-        int same_color_suit = ((suit+2)%4);
-        if (last_card.rank <= foundation_[same_color_suit]+2
-          || (!(n_stock_left_) && !split_empty_stock
-            && in_suit_seq_[last_card.rank-1][
-                       same_color_suit])) {
-          force_move=true;
-          forced_move = Move(Moves::ToFoundation, pile_index, suit,
-                             0, 0, expose, tabltype);
-        }
+    // Move Type 2 - Put card onto foundation
+    expose = (len_curr_pile == 1
+          && piles_[pile_index].hidden.size());
+    int suit = last_card.suit;
+    if ((last_card.rank-1) == foundation_[suit]
+      && (track_threshold <= n_stock_left_
+        || !last_move_info[pile_index].depth
+        || last_move_info[pile_index].can_move_to_found)) {
+      if (in_suit_seq_[last_card.rank][last_card.suit]) {
+        tabltype = TablType::Split;
       }
-    } // if pile not empty
+      else {
+        tabltype = TablType::None;
+      }
+      reg_move = Move(Moves::ToFoundation, pile_index, suit,
+                      0, 0, expose, tabltype);
+      valid_moves_.push_back(reg_move);
+      int same_color_suit = ((suit+2)%4);
+      if (InFoundation(last_card.rank - 2, same_color_suit)
+        || (!(n_stock_left_) && !split_empty_stock
+          && in_suit_seq_[last_card.rank-1][
+                     same_color_suit])) {
+        force_move = true;
+        forced_move = Move(Moves::ToFoundation, pile_index, suit,
+                           0, 0, expose, tabltype);
+      }
+    }
   } // for pile_index
 
   if (force_move) {
@@ -532,6 +647,9 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
 void AgnesState::UndoDealForPile(int pile_index) {
   AgnesPile& pile = piles_[pile_index];
   Card& last_card = pile.exposed.back();
+
+  assert(!pile.exposed.empty());
+
   in_suit_seq_[last_card.rank][last_card.suit] = false;
   last_in_pile_[last_card.rank][last_card.suit] = false;
   pile.exposed.pop_back();
@@ -575,9 +693,16 @@ void AgnesState::PlayBaseCard(const Card &card) {
 
 void AgnesState::MoveToFoundation(const Move & curr_move,
                              std::array<LastMoveInfo, N_PILE>& last_move_info,
-                             const SetNMovableOpts & snm_opts) {
+                             const SetNMovableOpts & snm_opts,
+                             const EmptyRule & enum_to_empty_pile) {
+  assert(!piles_[curr_move.from].exposed.empty());
+  assert(curr_move.expose ==
+           (piles_[curr_move.from].exposed.size() == 1
+            && !piles_[curr_move.from].hidden.empty()));
+
   ++depth_;
   Card last_card;
+
   // retrieve card and then destroy it
   last_card = piles_[curr_move.from].exposed.back();
   piles_[curr_move.from].exposed.pop_back();
@@ -600,13 +725,17 @@ void AgnesState::MoveToFoundation(const Move & curr_move,
     in_suit_seq_[last_card.rank][last_card.suit] = true;
   }
   // update sort order only if we emptied first pile
-  //if (!curr_state_.piles_[curr_move.from].exposed.size()) {
-    //curr_state_.set_sort_order(enum_to_empty_pile_);
-  //}
+  if (!piles_[curr_move.from].exposed.size()) {
+    set_sort_order(enum_to_empty_pile);
+  }
 }
 
 void AgnesState::UndoMoveToFoundation(const Move & curr_move,
-                                 const SetNMovableOpts & snm_opts) {
+                             const SetNMovableOpts & snm_opts,
+                             const EmptyRule & enum_to_empty_pile) {
+  assert(depth_ > 0 && foundation_[curr_move.suit] >= 0);
+  assert(!curr_move.expose || piles_[curr_move.from].exposed.size() == 1);
+
   --depth_;
   Card last_card (foundation_[curr_move.suit], curr_move.suit);
   if (curr_move.tabltype == TablType::None) {
@@ -624,16 +753,20 @@ void AgnesState::UndoMoveToFoundation(const Move & curr_move,
   piles_[curr_move.from].exposed.push_back(last_card);
   --foundation_[curr_move.suit];
   set_n_movable(curr_move.from, snm_opts);
-  //if (!curr_state_.piles_[curr_move.from].exposed.size()) {
-    //curr_state_.set_sort_order(enum_to_empty_pile_);
-  //}
+
+  if (piles_[curr_move.from].exposed.size() == 1) {
+    set_sort_order(enum_to_empty_pile);
+  }
 }
 
 void AgnesState::DealMove(const Deck &deck,
                           std::array<LastMoveInfo, N_PILE>& last_move_info,
-                          const SetNMovableOpts & snm_opts) {
+                          const SetNMovableOpts & snm_opts,
+                          const EmptyRule & enum_to_empty_pile) {
+  assert(n_stock_left_ > 0);
+
   ++depth_;
-  if (n_stock_left() == 2) {
+  if (n_stock_left_ == 2) {
     DealOntoPile(0, deck, true);
     DealOntoPile(1, deck, true);
 
@@ -656,11 +789,15 @@ void AgnesState::DealMove(const Deck &deck,
       last_move_info[pile_index] = LastMoveInfo();
     }
   }
+  set_sort_order(enum_to_empty_pile);
 }
 
-void AgnesState::UndoDeal(const SetNMovableOpts & snm_opts) {
+void AgnesState::UndoDeal(const SetNMovableOpts & snm_opts,
+                          const EmptyRule & enum_to_empty_pile) {
+  assert(depth_ > 0 && n_stock_left_ <= 16);
+
   --depth_;
-  if (n_stock_left() == 0) {
+  if (n_stock_left_ == 0) {
     UndoDealForPile(0);
     UndoDealForPile(1);
 
@@ -683,11 +820,16 @@ void AgnesState::UndoDeal(const SetNMovableOpts & snm_opts) {
   }
   // when undoing move, always update sort order, because it doesn't seem
   // worth it to check if any pile is being emptied.
-  //set_sort_order(enum_to_empty_pile_);
+  set_sort_order(enum_to_empty_pile);
 }
 
 void AgnesState::UndoTableauMove(const Move & curr_move,
-                            const SetNMovableOpts & snm_opts) {
+                                 const SetNMovableOpts & snm_opts,
+                                 const EmptyRule & enum_to_empty_pile) {
+  assert(depth_ > 0
+         && piles_[curr_move.to].exposed.size() >= curr_move.n_cards);
+  assert(!curr_move.expose || piles_[curr_move.from].exposed.size() == 1);
+
   --depth_;
   std::vector<Card>& from_pile = piles_[curr_move.to].exposed;
   std::vector<Card>& to_pile = piles_[curr_move.from].exposed;
@@ -713,7 +855,7 @@ void AgnesState::UndoTableauMove(const Move & curr_move,
   }
 
   // if putting card back on empty pile, need to update the sort order
-  //int pre_from_size = curr_state_.piles_[curr_move.from].exposed.size();
+  int pre_from_size = piles_[curr_move.from].exposed.size();
   if (curr_move.expose) {
     piles_[curr_move.from].hidden.push_back(
         piles_[curr_move.from].exposed.back());
@@ -732,15 +874,20 @@ void AgnesState::UndoTableauMove(const Move & curr_move,
   }
   set_n_movable(curr_move.from, snm_opts);
   set_n_movable(curr_move.to, snm_opts);
-  //if (!pre_from_size
-  //    || !piles_[curr_move.to].exposed.size()) {
-  //  piles_.set_sort_order(enum_to_empty_pile_);
-  //}
+  if (!pre_from_size || !piles_[curr_move.to].exposed.size()) {
+    set_sort_order(enum_to_empty_pile);
+  }
 }
 
 void AgnesState::TableauMove(const Move & curr_move,
                          std::array<LastMoveInfo, N_PILE>& last_move_info,
-                         const SetNMovableOpts & snm_opts) {
+                         const SetNMovableOpts & snm_opts,
+                         const EmptyRule & enum_to_empty_pile) {
+  assert(piles_[curr_move.from].exposed.size() >= curr_move.n_cards);
+  assert(curr_move.expose ==
+           (piles_[curr_move.from].exposed.size() == curr_move.n_cards
+            && !piles_[curr_move.from].hidden.empty()));
+
   ++depth_;
   std::vector<Card>& from_pile = piles_[curr_move.from].exposed;
   std::vector<Card>& to_pile = piles_[curr_move.to].exposed;
@@ -776,7 +923,7 @@ void AgnesState::TableauMove(const Move & curr_move,
   last_move_info[curr_move.to].can_move_to_found = (
     !(foundation_[last_card.suit] == last_card.rank - 1));
 
-  //int size_tgt_pre = to_pile.size();
+  int size_tgt_pre = to_pile.size();
   for (int n_to_pop=-1*curr_move.n_cards; n_to_pop < 0; ++n_to_pop) {
     int size_src_pile = from_pile.size();
     to_pile.push_back(from_pile[size_src_pile + n_to_pop]);
@@ -794,14 +941,13 @@ void AgnesState::TableauMove(const Move & curr_move,
   set_n_movable(curr_move.from, snm_opts);
   set_n_movable(curr_move.to, snm_opts);
 
-  //if (!piles_[from_].exposed.size() || !size_tgt_pre) {
-  //  set_sort_order(enum_to_empty_pile_);
-  //}
+  if (!piles_[curr_move.from].exposed.size() || !size_tgt_pre) {
+    set_sort_order(enum_to_empty_pile);
+  }
 }
-/*
+
 bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
-         int int_right, const AgnesPile &right)
-{
+               int int_right, const AgnesPile &right) {
   if (n_stock_left == 2 && ((int_left <= 1) || (int_right <= 1))) {
     return (int_left < int_right);
   }
@@ -837,8 +983,8 @@ bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
 
 void AgnesState::set_sort_order(EmptyRule move_to_empty_pile)
 {
-  array<AgnesPile, N_PILE> &piles = piles;
-  for (std::size_t i=0; i<sort_order.size(); ++i) {
+  array<AgnesPile, N_PILE> &piles = piles_;
+  for (std::size_t i=0; i<sort_order_.size(); ++i) {
     sort_order_[i]=i;
   }
   const int n_stock_left = n_stock_left_;
@@ -846,14 +992,14 @@ void AgnesState::set_sort_order(EmptyRule move_to_empty_pile)
   else if (move_to_empty_pile != EmptyRule::None) {
     std::sort(sort_order_.begin(), sort_order_.end(),
       [piles, n_stock_left](int left, int right) {
-             return pile_less(n_stock_left, left, piles_[left],
-                    right, piles_[right]); } );
+             return pile_less(n_stock_left, left, piles[left],
+                    right, piles[right]); } );
   }
   //cout << "after sort:";
   //for (const int &val : sort_order_) { cout << val << ","; }
   //cout << "\n";
 }
-*/
+
 
 //------------------------------------------------------------------------------
 // PRIVATE CLASS FUNCTIONS

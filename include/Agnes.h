@@ -181,9 +181,9 @@ class Agnes {
     //     2: Lost
     //     3: Terminated because number of states created exceeds
     //        max_states
-    // 
+    //
     // Throws
-    // ------ 
+    // ------
     // std::invalid_argument - move_to_empty_pile not valid
     // FileNotFoundError     - deck_filename provided but not found
     //--------------------------------------------------------------------------
@@ -321,9 +321,9 @@ class Agnes {
 
 class FileNotFoundError : public std::runtime_error {
   public :
-    FileNotFoundError(const std::string & file_name="") 
+    FileNotFoundError(const std::string & file_name="")
        : runtime_error("File not found: " + file_name),
-             filename_(file_name) {}; 
+             filename_(file_name) {};
 
     std::string filename_;
     ~FileNotFoundError() throw() {};

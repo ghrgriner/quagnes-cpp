@@ -24,6 +24,12 @@
 // [20240407] Make depth_ and n_stock_left_ int instead of unsigned variables.
 //   as it is possible for depth to overflow a uint16. For n_stock_left, there
 //   is likely nothing to be gained by using a uint8_t.
+// [20240411RG] (1) Add lower_last_, upper_last_, last_same_color_not_suit
+//   attributes to AgnesClass to support checking if we can force the last deal
+//   by seeing if the last couple cards can be put immediately into the
+//   foundation. Also added SetLastCards function to set these and IsDealForced
+//   function to check if deal can be forced. (2) Add InFoundation and
+//   same_color_suit functions.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNESSTATE_H
@@ -50,6 +56,11 @@ struct Card {
   int suit;
   Card() : rank(0), suit(0) {}
   Card(int rank, int suit) : rank(rank), suit(suit) {}
+  // return the other suit of the same color as an int
+
+  int same_color_suit() const {
+    return ((suit + 2) % 4);
+  }
 };
 
 // 1:1 mapping between string in `Agnes.move_to_empty_pile_` and these values
@@ -159,6 +170,15 @@ class AgnesState {
     std::string ToUncompStr();
     AgnesState(const AgnesState& other) = default;
     AgnesState& operator=(const AgnesState& other) = default;
+    // Set information about the two last cards in the deck that
+    // will be used by the IsDealForced function
+    void SetLastCards(const std::array<Card, N_CARD> & deck);
+    // Inline to return whether a card is in the foundation. Pass rank and suit
+    // separately. Otherwise, we might have to create a Card just to call this,
+    // which would be otherwise unnecessary.
+    bool InFoundation(int rank, int suit) const {
+      return (foundation_[suit] >= rank);
+    };
 
     // getters
     int depth();
@@ -175,19 +195,34 @@ class AgnesState {
     void set_is_loser(bool value);
     void set_curr_move(const Move &);
 
-    // other
-
-    // Set piles_[pile_index].n_movable.
+    // Set piles_[pile_index].n_movable
     //
-    // Note this just checks the number of cards from the bottom of the
-    // pile than can be moved according to the rules. It does not check
-    // whether there is somewhere the selected set of cards can be moved
-    // to. The latter is done in `set_valid_moves`.
+    //  Note this just checks the number of cards from the bottom of the
+    //  pile than can be moved according to the rules. It does not check
+    //  whether there is somewhere the selected set of cards can be moved
+    //  to. The latter is done in `set_valid_moves`.
     //
-    // The value of n_stock_left_ is used in addition to the
-    // parameters passed in to determine if the stock is empty. Therefore,
-    // this function must be called for all piles when the stock is
-    // made empty (or such a move undone).
+    //  It sets the number cards from the bottom of the pile that can be
+    //  moved according to the `move_same_suit` and `split_runs` parameter.
+    //
+    //  While doing so, it also applies additional optimizations
+    //  when the stock is empty and `split_empty_stock` is false about
+    //  whether to allow splitting a run between two cards of the same
+    //  suit (even when `split_runs` is True). Namely:
+    //    (1) If runs are moved by color, such splits are never allowed.
+    //    (2) If runs are moved by suit, such splits are not allowed
+    //    if it is certain the last card in the pile being moved is not
+    //    needed as a move target for the suit of the same color (ie,
+    //    if Card(last_card.rank - 1, last_card.same_color_suit) is
+    //    in the foundation or can be forced to the foundation, the split is
+    //    not allowed. [However, this second condition is implemented in
+    //    set_valid_moves rather than here, because this function is only
+    //    called when piles are touched and it's possible an operation on a
+    //    different pile activated or deactivated condition (2).
+    //
+    //  Because the function checks whether `self.n_stock_left == 0`, it
+    //  must be called for all piles when the stock is made empty (or such
+    //  a move undone). The call must follow updating of all piles.
     //
     // Arguments
     // ---------
@@ -196,73 +231,64 @@ class AgnesState {
     // snm_opts : SetNMovableOpts
     //     Tuple holding `Agnes` parameter values `move_same_suit`,
     //     `split_runs`, and `split_empty_stock`.
-    //
-    // Returns
-    // -------
-    // List of integers with number of cards that can be moved from a
-    // pile.
     //--------------------------------------------------------------------------
     void set_n_movable(const int pile_index, const SetNMovableOpts& snm_opts);
 
-    //  Set valid_moves_ to the valid moves available.
+    // Set self.valid_moves to the valid moves available.
     //
     //  Three types: DealMove()
     //               TablMove(from_=, to_=, n_cards=, expose=, tabltype=)
     //               MoveToFound(from_=, suit=, expose=, tabltype=)
-    //
-    //  The `n_movable` attribute in a pile contains a list of the number
-    //  of cards in a pile that can be moved (based on the `move_same_suit`
-    //  and `split_runs` parameters when the `Agnes` object was created.
-    //  It also takes into account the optimization that there is no
-    //  benefit to splitting a sequence between two cards of the same
-    //  suit when the stock is empty, unless the empty rule is 'any 1' or
-    //  'high 1'.
     //
     //  This function creates a list of all valid moves that can be done
     //  by seeing if a deal is available, which cards can be moved to which
     //  target piles, and which cards can be moved to the foundation.
     //
     //  Various optimizations reduce the moves available. Forcing a move
-    //  means this is the only move that can be played. (If multiple moves
-    //  meet the forcing criteria, the last forced is used.)
+    //  means this is the only move that can be played. Forced moves are
+    //  designed to reduce the space of moves that need to be searched
+    //  without changing the final score of the game. If more than one
+    //  move meets the criteria to be forced, the last move is chosen.
     //
-    //  (1) If n_stock_left == 2 and if track_threshold > 2, do not allow
-    //  the deal if there was a move between two piles that won't be covered
-    //  by the final deal. (Purpose is to reduce the search tree by forcing
-    //  these moves to occur after the final deal. This is only done when
-    //  track_threshold > 2 because otherwise we need to store the
-    //  information from LastMoveInfo in the `Agnes.losing_states` set.
-    //
-    //  (2) If there are multiple empty piles that won't be covered by
+    //  (1) If there are multiple empty piles that won't be covered by
     //  a future deal, only allow moves to the first pile.
     //
-    //  (3) If we are not using the `losing_states` set (track_threshold >
+    //  (2) If we are not using the `losing_states` set (track_threshold >
     //  `n_stock_left`), do not reverse a move (ie, move the same number
     //  of cards from one pile to another).
     //
-    //  (4) Force joins by suit sequence when the stock is empty and
-    //  `split_empty_stock is false` if the same-color top card of the
+    //  (3) Force joins by suit sequence when the stock is empty and
+    //  `split_empty_stock is False` if the same-color top card of the
     //  pile being moved satisfies (i) next lowest card is already in
-    //  the foundation or (ii) `move_same_suit = false` and already under
+    //  the foundation or (ii) `move_same_suit = False` and already under
     //  the next-highest card of the same suit or (iii)
-    //  `move_same_suit = false` and next-highest card is available to be
-    //  played on. For example, suppose we have a run starting with 4C
-    //  that we might put under 5C. This move is forced if (i) 3S in
-    //  foundation, (ii) `move_same_suit = false` and 4S already under 5S,
-    //  or (iii) `move_same_suit = false` and 5S is last in pile.
+    //  `move_same_suit = False` and next-highest card will be available
+    //  to be played on after the move (last_in_pile or will be the new
+    //  last card after the move from the current pile). For example,
+    //  suppose we have a run starting with 4C that we might put under 5C.
+    //  This move is forced if (i) 3S in foundation, or
+    //  (ii) `move_same_suit = False` and 4S already under 5S, or
+    //  (iii) `move_same_suit = False` and 5S is last in pile or we are
+    //  moving the 4C from under the 5S.
     //
-    //  (5) Force move to foundation if (a) rank <= (highest rank in
-    //  foundation of same-color suit + 2) or (b) stock is empty and
-    //  `split_empty_stock = false` and next lowest rank of the same
-    //  color is already under in sequence under the same suit.
+    //  (4) Force move to foundation if (a) Card(rank - 2, same_color_suit)
+    //  is already in the foundation or (b) stock is empty and
+    //  `split_empty_stock = False` and Card(rank - 1, same_color_suit)
+    //  is already under Card(rank, same_color_suit).
     //
-    //  (6) Additional restriction on splitting same suit besides those
-    //  implied by `split_runs` (which were implemented in set_n_movable).
-    //  Only allow splits of same suit if source or target will be covered
-    //  by future deal, or split_empty_stock=true or
-    //  Card(src_card.rank, same_color_suit(src_card)) is not in the foundation,
-    //  where src_card is the highest-rank card in the part of the pile that
-    //  is being moved.
+    //  (5) Force the last deal if the two dealt cards can immediately be
+    //  forced to the foundation.
+    //
+    //  (6) There are additional restrictions when the stock is empty for
+    //  when a run can be split between two cards of the same suit, even
+    //  when `split_runs=True`. When `move_same_suit is False`, the split
+    //  is never allowed (enforced in the `set_n_movable` function). Otherwise,
+    //  the split is allowed only if the last card in the pile being moved
+    //  will never need to have the same-color suit added, which means
+    //  Card(rank - 1, same_color_suit) is in the foundation or can be forced
+    //  to the foundation [Card(rank - 2, same_color_suit in foundation), and
+    //  Card(rank - 3, suit) in foundation] (where all ranks and suits refer to
+    //  the last card of the pile being moved).
     //
     //  Parameters
     //  ----------
@@ -282,6 +308,30 @@ class AgnesState {
         const bool split_empty_stock,
         const int track_threshold,
         const std::array<LastMoveInfo, N_PILE>& last_move_info);
+
+    // Check if deal can be forced (if cards can be forced to foundation).
+    //
+    //  Generally, a card can be forced to the foundation if (1) the card
+    //  below it is already in the foundation, and
+    //  (2a) Card(rank - 2, same_color_suit) is already in the foundation, or
+    //  (2b) Card(rank - 1, same_color_suit) is in sequence under a card of
+    //  the same suit and split_empty_stock is False.
+    //
+    //  This code also handles the case where the two last cards might be
+    //  the same color but different suits (in which case putting the first
+    //  card into the foundation will increase the threshold at which the
+    //  second card would be forced into the foundation).
+    //
+    //  Arguments
+    //  ---------
+    //  split_empty_stock : bool
+    //      `Agnes.split_empty_stock` attribute
+    //
+    //  Returns
+    //  -------
+    //  bool indicating whether the deal should be forced.
+    //-------------------------------------------------------------------------
+    bool IsDealForced(bool split_empty_stock);
 
     // Simpler logic than the above. We (redundantly) store the valid moves
     //  in valid_moves_ and the Agnes.all_valid_moves stack. When a move
@@ -368,19 +418,25 @@ class AgnesState {
     // array.
     //--------------------------------------------------------------------------
     void UndoMoveToFoundation(const Move & curr_move,
-                              const SetNMovableOpts & snm_opts);
+                              const SetNMovableOpts & snm_opts,
+                              const EmptyRule & move_to_empty_pile);
     void MoveToFoundation(const Move & curr_move,
                           std::array<LastMoveInfo, N_PILE>& last_move_info,
-                          const SetNMovableOpts & snm_opts) ;
+                          const SetNMovableOpts & snm_opts,
+                          const EmptyRule & move_to_empty_pile) ;
     void DealMove(const Deck &deck,
                   std::array<LastMoveInfo, N_PILE>& last_move_info,
-                  const SetNMovableOpts & snm_opts) ;
-    void UndoDeal(const SetNMovableOpts & snm_opts);
+                  const SetNMovableOpts & snm_opts,
+                  const EmptyRule & move_to_empty_pile) ;
+    void UndoDeal(const SetNMovableOpts & snm_opts,
+                  const EmptyRule & move_to_empty_pile);
     void TableauMove(const Move & curr_move,
                      std::array<LastMoveInfo, N_PILE>& last_move_info,
-                     const SetNMovableOpts & snm_opts) ;
+                     const SetNMovableOpts & snm_opts,
+                     const EmptyRule & move_to_empty_pile) ;
     void UndoTableauMove(const Move & curr_move,
-                         const SetNMovableOpts & snm_opts) ;
+                         const SetNMovableOpts & snm_opts,
+                         const EmptyRule & move_to_empty_pile) ;
   private:
     int depth_;
     uint8_t n_stock_left_;
@@ -405,9 +461,23 @@ class AgnesState {
     bool is_loop_;
     bool is_loser_;
     std::string hash_;
-    //std::array<int, N_PILE> sort_order_;
+    // 20240413
+    // Next four variables have information used in the is_deal_forced column
+    // it seems likely more efficient to calculate once and retrieve rather
+    // than recalcuate each time the function is called.
+    // lower-ranked of the last two cards in the deck
+    Card lower_last_;
+    // higher-ranked of the last two cards in the deck
+    Card upper_last_;
+    // true if lower_last and upper_last are the same suit and in order
+    bool last_same_suit_seq_;
+    // true if lower_last and upper_last are the same color and not the same
+    // suit
+    bool last_same_color_not_suit_;
+    // indicates listing which piles
+    std::array<int, N_PILE> sort_order_;
 
-    //void set_sort_order(EmptyRule move_to_empty_pile);
+    void set_sort_order(EmptyRule move_to_empty_pile);
     void PrintTableau();
     void PrintInSuitSeq();
     void PrintValidMoves(const std::vector<Move> &valid_moves);
