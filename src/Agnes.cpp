@@ -25,6 +25,8 @@
 // (2) Pass enum_to_empty_pile parameter to all functions that do or undo moves
 // as it is needed by AgnesState.set_sort_order. (3) Add assert to check that
 // a string is in the check_loops set before we erase it.
+// [20240114RG]: New `Agnes.max_states_guard_` attribute to guard against
+// overflow. Is set to N_STATES_MAX when max_states_=0.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -108,6 +110,8 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
   }
 
   InitializeDeckFromFile(deck_filename_);
+  if (!max_states_) max_states_guard_ = N_STATES_MAX;
+  else max_states_guard_ = max_states_;
 }
 
 //void Agnes::initialize_deck(string seed)
@@ -338,7 +342,7 @@ int Agnes::PerformMove()
     max_depth_ = curr_state_.depth();
   }
 
-  if ((max_states_ > 0) && (n_states_checked_ > max_states_)) {
+  if (n_states_checked_ >= max_states_guard_) {
     return 3;
   }
 

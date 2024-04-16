@@ -1,11 +1,9 @@
-*.o
-quagnes
 obj
 bin
 tests
 notgit
-Rules*md
-Program*md
+R
 R/*.Rout
+R/hold*
 R/analysis_output.txt
 RELEASE_NOTES.txt

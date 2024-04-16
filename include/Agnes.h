@@ -21,7 +21,8 @@
 // Author: Ray Griner
 // Purpose: Header file for Agnes class
 // Changes:
-// [20240318RG]:
+// [20240114RG]: New `Agnes.max_states_guard_` attribute to guard against
+// overflow and macro variable N_STATES_MAX with the maximum.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
@@ -42,6 +43,7 @@ namespace quagnes {
 
 // If changing this, be sure to update the function in quagnes.cpp that
 // converts the input argument to a StatesType;
+#define N_STATES_MAX UINT64_MAX
 typedef uint64_t StatesType;
 //typedef int StatesType;
 
@@ -266,6 +268,8 @@ class Agnes {
     // long-running game is likely to finish soon. TODO: consider switching
     // all_valid_moves_ to a vector so this can be done away with.
     std::array<int, N_TO_TRACK> moves_left_;
+    // Minimum of max_states_ (if max_states_ > 0) and INT_MAX (if == 0)
+    StatesType max_states_guard_;
 
     //-------------------------------------------------------------------------
     // Read deck from input file, one card per line where card='(rank, suit)'

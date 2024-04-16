@@ -16,8 +16,8 @@ OBJECTS     := $(SOURCE:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 CC          := g++
 INCLUDES    := -Iinclude
 
-CFLAGS = -g $(INCLUDES) -Wall -Wpedantic -Wextra
-#CFLAGS = $(INCLUDES) -Wall -Wpedantic -Wextra -O2
+#CFLAGS = -g $(INCLUDES) -Wall -Wpedantic -Wextra
+CFLAGS = $(INCLUDES) -Wall -Wpedantic -Wextra -O2
 
 all: $(EXE)
 

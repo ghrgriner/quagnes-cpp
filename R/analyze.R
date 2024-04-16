@@ -8,6 +8,8 @@
 #   generates the same results.
 # [RG20240331] - correct Wolter results to 45/1000000 instead of 14/1000000.
 #   This doesn't change any conclusions.
+# [RG20240415] - No longer need to process three separate files for 
+#   Up-Color-AnyRun rule.
 #------------------------------------------------------------------------------
 # Need Hmisc for binconf
 library(Hmisc)
@@ -189,25 +191,28 @@ print_table_header <- function() {
 cat("", file=output.file)
 print_table_header()
 
-dir = "tests/"
-df.dalton_anyrun_part1 = read.csv(paste0(dir, "dalton_anyrun.out")) 
-df.dalton_anyrun_part2 = read.csv(paste0(dir, "dalton_anyrun_part2.out")) 
-df.dalton_anyrun_part3 = read.csv(paste0(dir, "dalton_anyrun_part3.out")) 
-df.dalton_anyrun= rbind(df.dalton_anyrun_part1,
-                        df.dalton_anyrun_part2,
-                        df.dalton_anyrun_part3)
+rdir = "../tests/"
+df_most = read.csv(paste0(rdir, "up_color_highrun.out"))
+df.up_color_highrun_5912 = read.csv(paste0(rdir, "up_color_highrun_5912.out"))
+df.up_color_highrun_8231 = read.csv(paste0(rdir, "up_color_highrun_8231.out"))
+df.up_color_highrun_9901 = read.csv(paste0(rdir, "up_color_highrun_9901.out"))
+df.up_color_highrun = rbind(
+    df_most[df_most$rep_id != 5912 & df_most$rep_id != 8231 & df_most$rep_id != 9901, ],
+    df.up_color_highrun_5912,
+    df.up_color_highrun_8231,
+    df.up_color_highrun_9901)
 
-analyze(file=paste0(dir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None")
-analyze(file=paste0(dir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None")
-analyze(file=paste0(dir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit")
-analyze(file=paste0(dir, "up_color_highrun.out"),         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="c")
-analyze(file=paste0(dir, "up_color_highrun_nosplit.out"), emptyrule="high run", rule="Up-Color-HighRun-NoSplit")
-analyze(file=paste0(dir, "up_color_anyrun.out"),          emptyrule="none",     rule="Up-Color-AnyRun", rule_footnote="d")
-analyze(file=paste0(dir, "up_color_anyrun_nosplit.out"),  emptyrule="none",     rule="Up-Color-AnyRun-NoSplit")
-analyze(file=paste0(dir, "dalton_none.out"),              emptyrule="none",     rule="Up-Suit-None")
-analyze(file=paste0(dir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit")
-analyze(file=paste0(dir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
-analyze(file=paste0(dir, "dalton_highrun_nosplit.out"),   emptyrule="high run", rule="Up-Suit-HighRun-NoSplit")
-analyze(data=df.dalton_anyrun,                            emptyrule="any run",  rule="Up-Suit-AnyRun")
-analyze(file=paste0(dir, "dalton_anyrun_nosplit.out"),    emptyrule="any run",  rule="Up-Suit-AnyRun-NoSplit")
+analyze(file=paste0(rdir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None")
+analyze(file=paste0(rdir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None")
+analyze(file=paste0(rdir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit")
+analyze(data=df.up_color_highrun,                         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="c")
+analyze(file=paste0(rdir, "up_color_highrun_nosplit.out"), emptyrule="high run", rule="Up-Color-HighRun-NoSplit")
+analyze(file=paste0(rdir, "up_color_anyrun.out"),          emptyrule="none",     rule="Up-Color-AnyRun")
+analyze(file=paste0(rdir, "up_color_anyrun_nosplit.out"),  emptyrule="none",     rule="Up-Color-AnyRun-NoSplit")
+analyze(file=paste0(rdir, "dalton_none.out"),              emptyrule="none",     rule="Up-Suit-None")
+analyze(file=paste0(rdir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit")
+analyze(file=paste0(rdir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
+analyze(file=paste0(rdir, "dalton_highrun_nosplit.out"),   emptyrule="high run", rule="Up-Suit-HighRun-NoSplit")
+analyze(file=paste0(rdir, "dalton_anyrun.out"),            emptyrule="high run", rule="Up-Suit-AnyRun")
+analyze(file=paste0(rdir, "dalton_anyrun_nosplit.out"),    emptyrule="any run",  rule="Up-Suit-AnyRun-NoSplit")
 
