@@ -24,8 +24,8 @@ Sorel.
 Decks must be created before running the program and be stored in files in a
 directory structure named `decks/oM/deckN.txt`, etc..., where N is a number
 starting at 1 and M = floor(N/1000). See
-[Program Input and Output](wiki/Program-Input-and-Output#program-input)
-for additional details.
+[Program Input and Output](https://github.com/ghrgriner/quagnes-cpp/wiki/Program-Input-and-Output)
+for additional details for release version 1.1.0.
 
 ## Example
 Play 100 games using the rules given by Dalton [1,2].
@@ -39,13 +39,14 @@ the deck filename `deckN.txt` and return code (`rc`) which indicates whether a
 game is winnable (`rc=1`), not winnable (`rc=2`), or terminated without a result
 after exceeding the number of game states specified by the `-m` parameter.
 (`rc=3`). See
-[Program Input and Output](wiki/Program-Input-and-Output#program-output)
-for additional output columns and messages printed to standard error.
+[Program Input and Output](https://github.com/ghrgriner/quagnes-cpp/wiki/Program-Input-and-Output)
+for additional output columns and messages printed to standard error for
+release version 1.0.0.
 
 ## Game Rules, Program Methodology, and Analysis of Win Rates
 Further details on the game rules, program methodology, and analysis of win
-rates can be found
-[in the wiki](wiki/Rules,-Methodology,-and-Analysis-of-Win-Rates).
+rates for release version 1.1.0 can be found
+[in the wiki](https://github.com/ghrgriner/quagnes-cpp/blob/main/wiki/Rules,-Methodology,-and-Analysis-of-Win-Rates)
 
 ## References
 [1] Agnes (card game). Wikipedia.
