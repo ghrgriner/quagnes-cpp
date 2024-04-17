@@ -22,7 +22,9 @@
 // Purpose: Header file for Agnes class
 // Changes:
 // [20240114RG]: New `Agnes.max_states_guard_` attribute to guard against
-// overflow and macro variable N_STATES_MAX with the maximum.
+// overflow and macro variable kNStatesMax with the maximum.
+// [20240416RG] (1) Switch C-style #define constants to const variables.
+// (2) Make mark appropriate functions as const.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
@@ -42,10 +44,9 @@ namespace quagnes {
 //----------------------------------------------------------------------
 
 // If changing this, be sure to update the function in quagnes.cpp that
-// converts the input argument to a StatesType;
-#define N_STATES_MAX UINT64_MAX
+// converts the input argument to a StatesType
 typedef uint64_t StatesType;
-//typedef int StatesType;
+const StatesType kNStatesMax = UINT64_MAX;
 
 //------------------------------------------------------------------------------
 //  AgnesOptions: options to be passed at Agnes() construction
@@ -191,21 +192,21 @@ class Agnes {
     //--------------------------------------------------------------------------
     int Play();
 
-    StatesType n_states_checked();
-    StatesType n_deal();
-    StatesType n_move_card_in_tableau();
-    StatesType n_move_to_foundation();
-    StatesType n_no_move_possible();
-    int max_depth();
-    std::string move_to_empty_pile();
-    bool move_same_suit();
-    bool print_states();
-    int track_threshold();
-    bool split_runs();
-    bool maximize_score();
-    bool face_up();
-    int current_depth();
-    int max_score();
+    StatesType n_states_checked() const;
+    StatesType n_deal() const;
+    StatesType n_move_card_in_tableau() const;
+    StatesType n_move_to_foundation() const;
+    StatesType n_no_move_possible() const;
+    int max_depth() const;
+    std::string move_to_empty_pile() const;
+    bool move_same_suit() const;
+    bool print_states() const;
+    int track_threshold() const;
+    bool split_runs() const;
+    bool maximize_score() const;
+    bool face_up() const;
+    int current_depth() const;
+    int max_score() const;
     Agnes(const Agnes& other) = default;
     Agnes& operator=(const Agnes& other) = default;
 
@@ -247,7 +248,7 @@ class Agnes {
     std::stack<Move> moves_;
     // Stack of last move info at each point in the game. Used for an algorithm
     // optimization.
-    std::stack<std::array<LastMoveInfo, N_PILE>> all_lmi_;
+    std::stack<std::array<LastMoveInfo, kNPile>> all_lmi_;
     // Set containing game states that have been observed in the current path
     // through the game in order to prevent loops.
     std::set<std::string> check_loops_;
@@ -263,11 +264,11 @@ class Agnes {
     // `If move_to_empty_pile` is not 'any 1' or 'high 1' there is no benefit to
     // splitting a run between the same suit for a move.
     bool split_empty_stock_;
-    // Array that tracks how many valid moves for the first N_TO_TRACK game
+    // Array that tracks how many valid moves for the first kNToTrack game
     // states. Periodically printed to stderr so user can check whether a
     // long-running game is likely to finish soon. TODO: consider switching
     // all_valid_moves_ to a vector so this can be done away with.
-    std::array<int, N_TO_TRACK> moves_left_;
+    std::array<int, kNToTrack> moves_left_;
     // Minimum of max_states_ (if max_states_ > 0) and INT_MAX (if == 0)
     StatesType max_states_guard_;
 
@@ -317,10 +318,10 @@ class Agnes {
     //--------------------------------------------------------------------------
     void UndoMove(const bool &no_print);
     //void InitializeDeck();
-    void PrintDeck();
-    void PrintLastMoveInfo();
+    void PrintDeck() const;
+    void PrintLastMoveInfo() const;
     // Print moves_left_ attribute to stderr every 5 million states
-    void SummarizeState();
+    void SummarizeState() const;
 }; // end class Agnes
 
 class FileNotFoundError : public std::runtime_error {

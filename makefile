@@ -17,7 +17,8 @@ CC          := g++
 INCLUDES    := -Iinclude
 
 #CFLAGS = -g $(INCLUDES) -Wall -Wpedantic -Wextra
-CFLAGS = $(INCLUDES) -Wall -Wpedantic -Wextra -O2
+#CFLAGS = $(INCLUDES) -Wall -Wpedantic -Wextra -O2
+CFLAGS = $(INCLUDES) -DNDEBUG -Wall -Wpedantic -Wextra -O2
 
 all: $(EXE)
 

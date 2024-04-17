@@ -26,7 +26,9 @@
 // as it is needed by AgnesState.set_sort_order. (3) Add assert to check that
 // a string is in the check_loops set before we erase it.
 // [20240114RG]: New `Agnes.max_states_guard_` attribute to guard against
-// overflow. Is set to N_STATES_MAX when max_states_=0.
+// overflow. Is set to kNStatesMax when max_states_=0.
+// (1) Change C-style define constants to const variables. (2) Mark other
+// functions as const as appropriate.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -110,14 +112,14 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
   }
 
   InitializeDeckFromFile(deck_filename_);
-  if (!max_states_) max_states_guard_ = N_STATES_MAX;
+  if (!max_states_) max_states_guard_ = kNStatesMax;
   else max_states_guard_ = max_states_;
 }
 
 //void Agnes::initialize_deck(string seed)
 //{
-//  for (int rank=0; rank<N_RANK; ++rank) {
-//    for (int suit=0; suit<N_SUIT; ++suit) {
+//  for (int rank=0; rank<kNRank; ++rank) {
+//    for (int suit=0; suit<kNSuit; ++suit) {
 //      initial_deck_[rank*4+suit].rank = rank;
 //      initial_deck_[rank*4+suit].suit = suit;
 //    }
@@ -153,21 +155,21 @@ void Agnes::InitializeDeckFromFile(const string &deck_filename) {
 int Agnes::Play() {
   int i, j;
   LastMoveInfo empty_lmi;
-  array<LastMoveInfo, N_PILE> last_move_info;
+  array<LastMoveInfo, kNPile> last_move_info;
 
   // reset the indexing of all cards so base card has rank 0
-  for (i=0; i<N_CARD; ++i) {
+  for (i=0; i<kNCard; ++i) {
     deck_[i].rank = ((initial_deck_[i].rank - initial_deck_[0].rank)
-             % N_RANK);
-    if (deck_[i].rank < 0) deck_[i].rank += N_RANK;
+             % kNRank);
+    if (deck_[i].rank < 0) deck_[i].rank += kNRank;
     deck_[i].suit=initial_deck_[i].suit;
   }
   curr_state_.SetLastCards(deck_);
 
   curr_state_.PlayBaseCard(deck_[0]);
   score_ = 1;
-  for (i=0; i<N_PILE; ++i) {
-    for (j=i; j<N_PILE; ++j) {
+  for (i=0; i<kNPile; ++i) {
+    for (j=i; j<kNPile; ++j) {
       curr_state_.DealOntoPile(j, deck_, (face_up_ or j==i));
     }
   }
@@ -175,7 +177,7 @@ int Agnes::Play() {
   const SetNMovableOpts snm_opts (move_same_suit_, split_runs_,
                   split_empty_stock_);
 
-  for (i=0; i<N_PILE; ++i) {
+  for (i=0; i<kNPile; ++i) {
     curr_state_.set_n_movable(i, snm_opts);
   }
 
@@ -208,7 +210,7 @@ int Agnes::Play() {
   }
 }
 
-void Agnes::SummarizeState() {
+void Agnes::SummarizeState() const {
   std::cerr << "Processed " << n_states_checked_ << "|";
   std::cerr << all_valid_moves_.size();
   std::cerr << "|";
@@ -222,63 +224,63 @@ void Agnes::SummarizeState() {
 // Accessor functions
 //-------------------
 
-StatesType Agnes::n_states_checked() {
+StatesType Agnes::n_states_checked() const {
   return n_states_checked_;
 }
 
-StatesType Agnes::n_deal() {
+StatesType Agnes::n_deal() const {
   return n_deal_;
 }
 
-StatesType Agnes::n_move_card_in_tableau() {
+StatesType Agnes::n_move_card_in_tableau() const {
   return n_move_card_in_tableau_;
 }
 
-StatesType Agnes::n_move_to_foundation() {
+StatesType Agnes::n_move_to_foundation() const {
   return n_move_to_foundation_;
 }
 
-StatesType Agnes::n_no_move_possible() {
+StatesType Agnes::n_no_move_possible() const {
   return n_no_move_possible_;
 }
 
-int Agnes::max_depth() {
+int Agnes::max_depth() const {
   return max_depth_;
 }
 
-string Agnes::move_to_empty_pile() {
+string Agnes::move_to_empty_pile() const {
   return move_to_empty_pile_;
 }
 
-bool Agnes::move_same_suit() {
+bool Agnes::move_same_suit() const {
   return move_same_suit_;
 }
 
-bool Agnes::print_states() {
+bool Agnes::print_states() const {
   return print_states_;
 }
 
-bool Agnes::split_runs() {
+bool Agnes::split_runs() const {
   return split_runs_;
 }
 
-bool Agnes::maximize_score() {
+bool Agnes::maximize_score() const {
   return maximize_score_;
 }
 
-bool Agnes::face_up() {
+bool Agnes::face_up() const {
   return face_up_;
 }
 
-int Agnes::track_threshold() {
+int Agnes::track_threshold() const {
   return track_threshold_;
 }
 
-int Agnes::current_depth() {
+int Agnes::current_depth() const {
   return current_depth_;
 }
 
-int Agnes::max_score() {
+int Agnes::max_score() const {
   return max_score_;
 }
 
@@ -371,10 +373,10 @@ int Agnes::PerformMove()
     curr_state_.set_curr_move(curr_move);
     // For last_move_info, duplicate the top element and return a reference
     all_lmi_.push(all_lmi_.top());
-    array<LastMoveInfo, N_PILE>& last_move_info = all_lmi_.top();
+    array<LastMoveInfo, kNPile>& last_move_info = all_lmi_.top();
 
     valid_moves.pop_back();
-    if (all_valid_moves_.size() < N_TO_TRACK) {
+    if (all_valid_moves_.size() < kNToTrack) {
       moves_left_[all_valid_moves_.size()] = valid_moves.size();
     }
 
@@ -434,7 +436,7 @@ int Agnes::PerformMove()
                                   all_lmi_.top());
     }
 
-    if (score_ == N_CARD) {
+    if (score_ == kNCard) {
       // Won the game
       std::vector<Move> no_moves;
       moves_.push(curr_move);
@@ -453,8 +455,7 @@ int Agnes::PerformMove()
   }
 }
 
-void Agnes::PrintDeck()
-{
+void Agnes::PrintDeck() const {
   cout << "[";
   for (auto it=initial_deck_.begin(); it != initial_deck_.end(); ++it) {
     if (it!=initial_deck_.begin()) {
@@ -465,9 +466,8 @@ void Agnes::PrintDeck()
   cout << "]" << "\n";
 }
 
-void Agnes::PrintLastMoveInfo()
-{
-   const array<LastMoveInfo, N_PILE>& last_move_info = all_lmi_.top();
+void Agnes::PrintLastMoveInfo() const {
+   const array<LastMoveInfo, kNPile>& last_move_info = all_lmi_.top();
 
    cout << "Last move info:[";
    for (auto it=last_move_info.begin(); it != last_move_info.end(); ++it) {

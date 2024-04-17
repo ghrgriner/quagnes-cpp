@@ -4,25 +4,27 @@
 # Date: 30-Mar-2024
 # Purpose: analyze.R was used to generate the statistical results put in the
 #   README.md for v0.8.2. This cleans up the file a bit and reruns pointing
-#   to the new C++ directory location for the files used as input. It 
+#   to the new C++ directory location for the files used as input. It
 #   generates the same results.
 # [RG20240331] - correct Wolter results to 45/1000000 instead of 14/1000000.
 #   This doesn't change any conclusions.
-# [RG20240415] - No longer need to process three separate files for 
+# [RG20240415] - No longer need to process three separate files for
 #   Up-Color-AnyRun rule.
+# [RG20240417] - Add fill.from.nosplit function and use it to fill in some
+#   results for Up-Color-HighRun that were unsolved.
 #------------------------------------------------------------------------------
 # Need Hmisc for binconf
 library(Hmisc)
 
-#----------------------------------------------------------------------------- 
+#-----------------------------------------------------------------------------
 # Purpose: Report the win rate, 95% CI, and calculate statistical tests
 #   for comparison with Masten and Wolter
 # Parameters:
 #     x: numerator of proportion
 #     n: denominator of proportion
-#     emptyrule: rule for how empty piles are handled so we know which 
+#     emptyrule: rule for how empty piles are handled so we know which
 #         external proportion to compare to
-#----------------------------------------------------------------------------- 
+#-----------------------------------------------------------------------------
 check.prob <- function(x, n, emptyrule) {
     cat(paste0("Wins: ", x, "\n"))
     cat(paste0("Win rate and 95% CI:\n"))
@@ -64,6 +66,25 @@ check.prob <- function(x, n, emptyrule) {
         fisher_exact = fisher_exact))
 }
 
+#-----------------------------------------------------------------------------
+# Purpose: Rarely, the NoSplit rules give a win when the Split rules do not
+#   complete until memory is exhausted. But a win under NoSplit must be a win
+#   under Split, so we update the results here.
+#-----------------------------------------------------------------------------
+fill.from.nosplit <- function(split.df, nosplit.df) {
+    unsolved <- (split.df$rc == 3)
+    solved <- (unsolved & nosplit.df$rc == 1)
+    split.df[unsolved & solved, "rc"] = 1
+    split.df[unsolved & solved, "max_score"] = 52
+    #split.df[solved, c("max_score")] = 52
+    if (any(solved)) {
+        cat(paste0("\nNoSplit win used when Split was not solved for ",
+            sum(solved, na.rm=TRUE), " game(s) (row_indices=",
+            toString(which(solved)), ")\n"))
+    }
+    return (split.df)
+}
+
 fmt.pval <- function(p.value) {
     return (ifelse(p.value < .0001, "<.0001",
         ifelse(p.value<.001, sprintf("%6.4f", p.value),
@@ -71,7 +92,7 @@ fmt.pval <- function(p.value) {
                 sprintf("%4.2f", p.value)))))
 }
 
-analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL, 
+analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
                     rule_footnote = NULL) {
     if (!is.null(file) && !file.exists(file)) {
         stop(paste("analyze: file does not exist: ", file))
@@ -97,7 +118,7 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
     n.total <- nrow(df)
     is.completed <- ( (df$rc == 1) | (df$rc == 2))
     n.completed <- sum( is.completed, na.rm=TRUE)
-    
+
     # Print number of completed simulations
     cat(paste0("Observations (n): ", n.total, "\n"))
     comp.df <- df[(df$rc == 1) | (df$rc == 2),]
@@ -155,7 +176,7 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
             fmt.pval(ret.low$masten_test$p.value), ", ",
             fmt.pval(ret.high$masten_test$p.value), " "))
     }
-    
+
     stchk = df$n_states_checked
     cat("\nStates checked:\n")
     cat(paste0("Mean (SD): ", mean(stchk), " (", sd(stchk), ")\n"))
@@ -177,9 +198,13 @@ to_output <- function(str_to_print) {
 }
 
 print_table_header <- function() {
-    to_output("Output Summary for Pasting in README.md:\n\n")
+    to_output("Output Summary for Pasting in README.md:\n")
+    to_output("(but if win rates, 95% CI, and P-value are the same when we\n")
+    to_output("present lower/upper bounds, delete those manually, if not\n")
+    to_output("the same, add footnote back to win rate header and update\n")
+    to_output("other footnotes as needed):\n\n")
     to_output("| Rule Variant               | Completed Simulations, (n) |")
-    to_output(" Wins, n (% [95% CI]) [a] | P-value [b] |")
+    to_output(" Wins, n (% [95% CI]) | P-value [a] |")
     to_output(" Mean (SD) States Examined (10^3) |")
     to_output(" Maximum States Examined (10^6) |\n")
 
@@ -192,20 +217,28 @@ cat("", file=output.file)
 print_table_header()
 
 rdir = "../tests/"
+
+#-------------------------------------------------------------------------------
+# First do some manual work for the Up-Color-HighRun rules, which has a few
+# cases that are unsolved.
+#-------------------------------------------------------------------------------
+df.up_color_highrun_nosplit = read.csv(paste0(rdir, "up_color_highrun_nosplit.out"))
 df_most = read.csv(paste0(rdir, "up_color_highrun.out"))
+
+df_fill = fill.from.nosplit(df_most, df.up_color_highrun_nosplit)
+
 df.up_color_highrun_5912 = read.csv(paste0(rdir, "up_color_highrun_5912.out"))
-df.up_color_highrun_8231 = read.csv(paste0(rdir, "up_color_highrun_8231.out"))
 df.up_color_highrun_9901 = read.csv(paste0(rdir, "up_color_highrun_9901.out"))
+
 df.up_color_highrun = rbind(
-    df_most[df_most$rep_id != 5912 & df_most$rep_id != 8231 & df_most$rep_id != 9901, ],
+    df_fill[df_fill$rep_id != 5912 & df_fill$rep_id != 9901, ],
     df.up_color_highrun_5912,
-    df.up_color_highrun_8231,
     df.up_color_highrun_9901)
 
 analyze(file=paste0(rdir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None")
 analyze(file=paste0(rdir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None")
 analyze(file=paste0(rdir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit")
-analyze(data=df.up_color_highrun,                         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="c")
+analyze(data=df.up_color_highrun,                         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="b")
 analyze(file=paste0(rdir, "up_color_highrun_nosplit.out"), emptyrule="high run", rule="Up-Color-HighRun-NoSplit")
 analyze(file=paste0(rdir, "up_color_anyrun.out"),          emptyrule="none",     rule="Up-Color-AnyRun")
 analyze(file=paste0(rdir, "up_color_anyrun_nosplit.out"),  emptyrule="none",     rule="Up-Color-AnyRun-NoSplit")

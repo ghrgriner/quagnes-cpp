@@ -30,6 +30,11 @@
 //   foundation. Also added SetLastCards function to set these and IsDealForced
 //   function to check if deal can be forced. (2) Add InFoundation and
 //   same_color_suit functions.
+// [20240416RG] (1) Switch C-style #define constants to const variables.
+//   (2) Mark a few other functions as const. (3) Remove split_empty_stock
+//   parameter from IsDealForced as we have simplified the logic so that we
+//   no longer force deal if !split_empty_stock and the 1-lower next suit is
+//   in-suit sequence.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNESSTATE_H
@@ -43,11 +48,11 @@
 
 namespace quagnes {
 
-#define N_SUIT 4
-#define N_RANK 13
-#define N_TO_TRACK 100
-#define N_PILE 7
-#define N_CARD 52
+const int kNSuit = 4;
+const int kNRank = 13;
+const int kNToTrack = 100;
+const int kNPile = 7;
+const int kNCard = 52;
 
 // A playing card.
 struct Card {
@@ -104,7 +109,7 @@ struct SetNMovableOpts {
 };
 
 // Deck of cards
-typedef std::array<Card, N_CARD> Deck;
+typedef std::array<Card, kNCard> Deck;
 
 //------------------------------------------------------------------------------
 // Store information about the last tableau move done for a pile
@@ -162,17 +167,17 @@ typedef std::array<quagnes::AgnesPile, 7>::size_type PileSizeType;
 class AgnesState {
   public:
     AgnesState();
-    void Print();
+    void Print() const;
     // Compressed string representation of the state.
     // Stored in `Agnes.losing_states` attribute.
     void UpdateHash();
     // Uncompressed string representation of the state used in Print().
-    std::string ToUncompStr();
+    std::string ToUncompStr() const;
     AgnesState(const AgnesState& other) = default;
     AgnesState& operator=(const AgnesState& other) = default;
     // Set information about the two last cards in the deck that
     // will be used by the IsDealForced function
-    void SetLastCards(const std::array<Card, N_CARD> & deck);
+    void SetLastCards(const std::array<Card, kNCard> & deck);
     // Inline to return whether a card is in the foundation. Pass rank and suit
     // separately. Otherwise, we might have to create a Card just to call this,
     // which would be otherwise unnecessary.
@@ -181,13 +186,13 @@ class AgnesState {
     };
 
     // getters
-    int depth();
-    uint8_t n_stock_left();
+    int depth() const;
+    uint8_t n_stock_left() const;
     //Move curr_move();
-    std::vector<Move> valid_moves();
-    bool is_loop();
-    bool is_loser();
-    std::string hash();
+    std::vector<Move> valid_moves() const;
+    bool is_loop() const;
+    bool is_loser() const;
+    std::string hash() const;
 
     // simple setters
     void ClearValidMoves();
@@ -300,14 +305,14 @@ class AgnesState {
     //      `Agnes.split_empty_stock` attribute
     //  track_threshold : int
     //      `Agnes.track_threshold` attribute
-    //  last_move_info : std::array<LastMoveInfo, N_PILE>&
+    //  last_move_info : std::array<LastMoveInfo, kNPile>&
     //      The LastMoveInfo information for this state
     //--------------------------------------------------------------------------
     void set_valid_moves(EmptyRule move_to_empty_pile,
       const bool move_same_suit,
         const bool split_empty_stock,
         const int track_threshold,
-        const std::array<LastMoveInfo, N_PILE>& last_move_info);
+        const std::array<LastMoveInfo, kNPile>& last_move_info);
 
     // Check if deal can be forced (if cards can be forced to foundation).
     //
@@ -317,6 +322,9 @@ class AgnesState {
     //  (2b) Card(rank - 1, same_color_suit) is in sequence under a card of
     //  the same suit and split_empty_stock is False.
     //
+    //  Here we consider only (1)+(2a), as the correctness is easier to
+    //  discern and the effect of (1)+(2b) is negligible.
+    //
     //  This code also handles the case where the two last cards might be
     //  the same color but different suits (in which case putting the first
     //  card into the foundation will increase the threshold at which the
@@ -324,14 +332,12 @@ class AgnesState {
     //
     //  Arguments
     //  ---------
-    //  split_empty_stock : bool
-    //      `Agnes.split_empty_stock` attribute
     //
     //  Returns
     //  -------
     //  bool indicating whether the deal should be forced.
     //-------------------------------------------------------------------------
-    bool IsDealForced(bool split_empty_stock);
+    bool IsDealForced() const;
 
     // Simpler logic than the above. We (redundantly) store the valid moves
     //  in valid_moves_ and the Agnes.all_valid_moves stack. When a move
@@ -402,7 +408,7 @@ class AgnesState {
     //  -------
     //  bool that is true if any pile or combination of piles blocks a win.
     //--------------------------------------------------------------------------
-    bool IsAnyPileBlocked();
+    bool IsAnyPileBlocked() const;
 
     //--------------------------------------------------------------------------
     // Functions to implement and undo the three different types of moves.
@@ -421,17 +427,17 @@ class AgnesState {
                               const SetNMovableOpts & snm_opts,
                               const EmptyRule & move_to_empty_pile);
     void MoveToFoundation(const Move & curr_move,
-                          std::array<LastMoveInfo, N_PILE>& last_move_info,
+                          std::array<LastMoveInfo, kNPile>& last_move_info,
                           const SetNMovableOpts & snm_opts,
                           const EmptyRule & move_to_empty_pile) ;
     void DealMove(const Deck &deck,
-                  std::array<LastMoveInfo, N_PILE>& last_move_info,
+                  std::array<LastMoveInfo, kNPile>& last_move_info,
                   const SetNMovableOpts & snm_opts,
                   const EmptyRule & move_to_empty_pile) ;
     void UndoDeal(const SetNMovableOpts & snm_opts,
                   const EmptyRule & move_to_empty_pile);
     void TableauMove(const Move & curr_move,
-                     std::array<LastMoveInfo, N_PILE>& last_move_info,
+                     std::array<LastMoveInfo, kNPile>& last_move_info,
                      const SetNMovableOpts & snm_opts,
                      const EmptyRule & move_to_empty_pile) ;
     void UndoTableauMove(const Move & curr_move,
@@ -441,9 +447,9 @@ class AgnesState {
     int depth_;
     uint8_t n_stock_left_;
     // the 7 piles in the game
-    std::array<AgnesPile, N_PILE> piles_;
+    std::array<AgnesPile, kNPile> piles_;
     Move curr_move_;
-    std::array<int, N_SUIT> foundation_;
+    std::array<int, kNSuit> foundation_;
     // True if a card is in an exposed pile in sequence under a card of
     // the same suit or in the foundation. This is important because once the
     // stock is empty, then most of the time (ie, when
@@ -451,10 +457,10 @@ class AgnesState {
     // movable sequence at this point for a move. Can also be used to determine
     // when a move that joins two sequences can be forced (see set_valid_moves
     // for details).
-    std::array<std::array<bool, N_SUIT>, N_RANK> in_suit_seq_;
+    std::array<std::array<bool, kNSuit>, kNRank> in_suit_seq_;
     // True if a card is the last one in an exposed pile or in the foundation.
     // See `set_valid_moves()` for why this is useful.
-    std::array<std::array<bool, N_SUIT>, N_RANK> last_in_pile_;
+    std::array<std::array<bool, kNSuit>, kNRank> last_in_pile_;
     // Valid moves remaining at this state.
     std::vector<Move> valid_moves_;
     // stores whether a state has been identified as a loop
@@ -475,13 +481,13 @@ class AgnesState {
     // suit
     bool last_same_color_not_suit_;
     // indicates listing which piles
-    std::array<int, N_PILE> sort_order_;
+    std::array<int, kNPile> sort_order_;
 
     void set_sort_order(EmptyRule move_to_empty_pile);
-    void PrintTableau();
-    void PrintInSuitSeq();
-    void PrintValidMoves(const std::vector<Move> &valid_moves);
-    void PrintFoundation();
+    void PrintTableau() const;
+    void PrintInSuitSeq() const;
+    void PrintValidMoves(const std::vector<Move> &valid_moves) const;
+    void PrintFoundation() const;
 };
 
 } // namespace quagnes

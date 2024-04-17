@@ -42,6 +42,11 @@
 //   score must be obtained.
 //   (6) Add assert statements to beginning of the 6 functions that do moves
 //   and unmoves.
+// [20230416] (1) Change C-style define constants to const
+//   (2) Mark a few other functions as const. (3) Remove split_empty_stock
+//   parameter from IsDealForced and simplify the logic so that we no longer
+//   force deal if !split_empty_stock and the 1-lower next suit is in-suit
+//   sequence.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -62,12 +67,12 @@ namespace quagnes {
 // STATIC FUNCTION PROTOTYPES
 //------------------------------------------------------------------------------
 static bool visit(const int vertex,
-       const std::array<std::array<bool, N_SUIT>, N_SUIT>& g,
-       std::array<bool, N_SUIT>& current_path,
-       std::array<bool, N_SUIT>& visited);
-static bool cyclic(const std::array<std::array<bool, N_SUIT>, N_SUIT>& g);
+       const std::array<std::array<bool, kNSuit>, kNSuit>& g,
+       std::array<bool, kNSuit>& current_path,
+       std::array<bool, kNSuit>& visited);
+static bool cyclic(const std::array<std::array<bool, kNSuit>, kNSuit>& g);
 static bool IsLastDealBlocked(const array<LastMoveInfo,
-                              N_PILE>& last_move_info);
+                              kNPile>& last_move_info);
 
 static string DescribeMove(const Move &move);
 //bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
@@ -107,15 +112,15 @@ static string DescribeMove(const Move &move) {
 }
 
 static bool visit(const int vertex,
-       const std::array<std::array<bool, N_SUIT>, N_SUIT>& g,
-       std::array<bool, N_SUIT>& current_path,
-       std::array<bool, N_SUIT>& visited) {
+       const std::array<std::array<bool, kNSuit>, kNSuit>& g,
+       std::array<bool, kNSuit>& current_path,
+       std::array<bool, kNSuit>& visited) {
   if (visited[vertex]) return false;
 
   visited[vertex]=true;
   current_path[vertex]=true;
 
-  for (int neighbor=0; neighbor<N_SUIT; ++neighbor) {
+  for (int neighbor=0; neighbor<kNSuit; ++neighbor) {
     if (!g[vertex][neighbor]) continue;   // not a neighbor
     if (current_path[neighbor]
         || visit(neighbor, g, current_path, visited)) {
@@ -127,12 +132,12 @@ static bool visit(const int vertex,
 }
 
 // Says whether graph has a cycle
-static bool cyclic(const std::array<std::array<bool, N_SUIT>, N_SUIT>& g) {
-  std::array<bool, N_SUIT> current_path = {false, false, false, false};
-  std::array<bool, N_SUIT> visited = {false, false, false, false};
+static bool cyclic(const std::array<std::array<bool, kNSuit>, kNSuit>& g) {
+  std::array<bool, kNSuit> current_path = {false, false, false, false};
+  std::array<bool, kNSuit> visited = {false, false, false, false};
   bool cycle = false;
 
-  for (int v=0; v<N_SUIT; ++v) {
+  for (int v=0; v<kNSuit; ++v) {
     cycle=visit(v, g, current_path, visited);
     if (cycle) return true;
   }
@@ -144,7 +149,7 @@ static bool cyclic(const std::array<std::array<bool, N_SUIT>, N_SUIT>& g) {
 //------------------------------------------------------------------------------
 AgnesState::AgnesState()
     : depth_(0),
-      n_stock_left_(N_CARD),
+      n_stock_left_(kNCard),
       piles_(),
       curr_move_(),
       foundation_(),
@@ -160,22 +165,22 @@ AgnesState::AgnesState()
   for (std::size_t i=0; i<sort_order_.size(); ++i) {
     sort_order_[i] = i;
   }
-  for (int i=0; i<N_RANK; ++i) {
-    for (int j=0; j<N_SUIT; ++j) {
+  for (int i=0; i<kNRank; ++i) {
+    for (int j=0; j<kNSuit; ++j) {
       in_suit_seq_[i][j] = false;
       last_in_pile_[i][j] = false;
     }
   }
 }
 
-void AgnesState::SetLastCards(const std::array<Card, N_CARD> & deck) {
+void AgnesState::SetLastCards(const std::array<Card, kNCard> & deck) {
   // no need to keep the last two cards in order here and it's better
-  if (deck[N_CARD-1].rank < deck[N_CARD-2].rank) {
-    lower_last_ = deck[N_CARD-1];
-    upper_last_ = deck[N_CARD-2];
+  if (deck[kNCard-1].rank < deck[kNCard-2].rank) {
+    lower_last_ = deck[kNCard-1];
+    upper_last_ = deck[kNCard-2];
   } else {
-    lower_last_ = deck[N_CARD-2];
-    upper_last_ = deck[N_CARD-1];
+    lower_last_ = deck[kNCard-2];
+    upper_last_ = deck[kNCard-1];
   }
   last_same_suit_seq_ = (lower_last_.suit == upper_last_.suit
       && lower_last_.rank + 1 == upper_last_.rank);
@@ -184,27 +189,27 @@ void AgnesState::SetLastCards(const std::array<Card, N_CARD> & deck) {
 }
 
 // Getters and simple setters
-int AgnesState::depth() {
+int AgnesState::depth() const {
   return depth_;
 }
 
-uint8_t AgnesState::n_stock_left() {
+uint8_t AgnesState::n_stock_left() const {
   return n_stock_left_;
 }
 
-std::vector<Move> AgnesState::valid_moves() {
+std::vector<Move> AgnesState::valid_moves() const {
   return valid_moves_;
 }
 
-bool AgnesState::is_loop() {
+bool AgnesState::is_loop() const {
   return is_loop_;
 }
 
-bool AgnesState::is_loser() {
+bool AgnesState::is_loser() const {
   return is_loser_;
 }
 
-string AgnesState::hash() {
+string AgnesState::hash() const {
   return hash_;
 }
 
@@ -231,7 +236,7 @@ void AgnesState::ClearValidMoves() {
 
 // Other public functions
 
-void AgnesState::Print() {
+void AgnesState::Print() const {
   cout << "\nMove: " << DescribeMove(curr_move_) << "\n\n";
   cout << "piles:" << ToUncompStr() << "\n";
   cout << "depth:" << depth_;
@@ -245,7 +250,7 @@ void AgnesState::Print() {
   cout << "\n";
 }
 
-string AgnesState::ToUncompStr() {
+string AgnesState::ToUncompStr() const {
   std::ostringstream retoss;
 
   retoss << std::to_string(n_stock_left_);
@@ -253,12 +258,12 @@ string AgnesState::ToUncompStr() {
     retoss << "#";
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
       if (it != pile.exposed.begin()) { retoss << "-"; }
-      retoss << std::to_string((it->suit)*N_RANK+(it->rank));
+      retoss << std::to_string((it->suit)*kNRank+(it->rank));
     }
     retoss << "#";
     for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
       if (it != pile.hidden.begin()) { retoss << "-"; }
-      retoss << std::to_string((it->suit)*N_RANK+(it->rank));
+      retoss << std::to_string((it->suit)*kNRank+(it->rank));
     }
   }
   return retoss.str();
@@ -268,24 +273,24 @@ void AgnesState::UpdateHash() {
   std::ostringstream retoss;
 
   retoss << (n_stock_left_);
-  for (PileSizeType pile_index=0; pile_index<N_PILE; ++pile_index) {
+  for (PileSizeType pile_index=0; pile_index<kNPile; ++pile_index) {
     //for (const AgnesPile& pile : piles_) {
     AgnesPile& pile = piles_[sort_order_[pile_index]];
     //AgnesPile& pile = piles_[pile_index];
     retoss << "#";
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
-      retoss << std::to_string(48+(it->suit)*N_RANK+(it->rank));
+      retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
     }
     retoss << "#";
     for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
-      retoss << std::to_string(48+(it->suit)*N_RANK+(it->rank));
+      retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
     }
   }
   hash_ = retoss.str();
 }
 
-bool AgnesState::IsAnyPileBlocked() {
-  std::array<std::array<bool, N_SUIT>, N_SUIT> graph = {
+bool AgnesState::IsAnyPileBlocked() const {
+  std::array<std::array<bool, kNSuit>, kNSuit> graph = {
       false, false, false, false, false, false, false, false,
       false, false, false, false, false, false, false, false};
 
@@ -293,7 +298,7 @@ bool AgnesState::IsAnyPileBlocked() {
     PileSizeType hSize=pile.hidden.size();
     PileSizeType pSize=pile.exposed.size();
     if (hSize+pSize) {
-      std::array<bool, N_SUIT> king_found = {false, false, false, false};
+      std::array<bool, kNSuit> king_found = {false, false, false, false};
       // work backwards through the exposed file and then backwards
       // through the hidden pile
       for (PileSizeType j=0; j<pSize; ++j) {
@@ -301,7 +306,7 @@ bool AgnesState::IsAnyPileBlocked() {
         if (card.rank == 12) {
           king_found[card.suit] = true;
         }
-        for (int k=0; k<N_SUIT; ++k) {
+        for (int k=0; k<kNSuit; ++k) {
           if (king_found[k] && ((card.rank<12) || (card.suit !=k))) {
             graph[k][card.suit] = true;
           }
@@ -312,7 +317,7 @@ bool AgnesState::IsAnyPileBlocked() {
         if (card.rank == 12) {
           king_found[card.suit] = true;
         }
-        for (int k=0; k<N_SUIT; ++k) {
+        for (int k=0; k<kNSuit; ++k) {
           if (king_found[k] && ((card.rank<12) || (card.suit !=k))) {
             graph[k][card.suit] = true;
           }
@@ -387,10 +392,10 @@ void AgnesState::set_n_movable(const int pile_index,
 
 // Return true if piles 2-6 (using zero-indexing) had a move
 static bool IsLastDealBlocked(const array<LastMoveInfo,
-                              N_PILE>& last_move_info) {
+                              kNPile>& last_move_info) {
   //return false;
   std::set<int> anydup;
-  for (std::size_t i=2; i<N_PILE; ++i) {
+  for (std::size_t i=2; i<kNPile; ++i) {
     if (last_move_info[i].depth) {
       std::pair<std::set<int>::iterator, bool> ret=anydup.insert(
           last_move_info[i].depth);
@@ -408,7 +413,7 @@ static bool IsLastDealBlocked(const array<LastMoveInfo,
 // foundation or in sequence under the same suit). This extends that concept
 // to the last deal. If the last deal would result in both cards being
 // immediately forced to the foundation, we also force the deal.
-bool AgnesState::IsDealForced(bool split_empty_stock) {
+bool AgnesState::IsDealForced() const {
   // We already sorted the last two cards so that lower_last_ <= upper_last_
   const Card & card1 = lower_last_;
   const Card & card2 = upper_last_;
@@ -429,15 +434,9 @@ bool AgnesState::IsDealForced(bool split_empty_stock) {
      }
 
      bool card1_forcable = (can_put1
-         && (InFoundation(card1.rank - 2, card1.same_color_suit())
-                 || (!split_empty_stock
-                     && in_suit_seq_[card1.rank - 1][
-                                     card1.same_color_suit()])));
+             && (InFoundation(card1.rank - 2, card1.same_color_suit())));
      bool card2_forcable = (can_put2
-             && (InFoundation(card2.rank - 2, card2.same_color_suit())
-                 || (!split_empty_stock
-                     && in_suit_seq_[card2.rank - 1][
-                                     card2.same_color_suit()])));
+             && (InFoundation(card2.rank - 2, card2.same_color_suit())));
      if (card1_forcable && card2_forcable) {
        return true;
      }
@@ -455,7 +454,7 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
       const bool move_same_suit,
       const bool split_empty_stock,
       const int track_threshold,
-      const array<LastMoveInfo, N_PILE>& last_move_info) {
+      const array<LastMoveInfo, kNPile>& last_move_info) {
   valid_moves_.clear();
   bool force_move = false;
   Card tgt_card = {0, 0};
@@ -469,7 +468,7 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
            || !IsLastDealBlocked(last_move_info)))) {
     reg_move = Move(Moves::Deal, 0, 0, 0, 0, false, TablType::None);
     valid_moves_.push_back( reg_move );
-    if (IsDealForced(split_empty_stock)) {
+    if (IsDealForced()) {
       force_move = true;
       forced_move = Move(Moves::Deal, 0, 0, 0, 0, false, TablType::None);
     }
@@ -663,7 +662,7 @@ void AgnesState::UndoDealForPile(int pile_index) {
 void AgnesState::DealOntoPile(int pile_index, const Deck &deck,
                               const bool face_up) {
   AgnesPile& pile = piles_[pile_index];
-  const Card& card = deck[N_CARD - n_stock_left_];
+  const Card& card = deck[kNCard - n_stock_left_];
 
   if (n_stock_left_ <= 0) throw;
   if (face_up) {
@@ -692,7 +691,7 @@ void AgnesState::PlayBaseCard(const Card &card) {
 }
 
 void AgnesState::MoveToFoundation(const Move & curr_move,
-                             std::array<LastMoveInfo, N_PILE>& last_move_info,
+                             std::array<LastMoveInfo, kNPile>& last_move_info,
                              const SetNMovableOpts & snm_opts,
                              const EmptyRule & enum_to_empty_pile) {
   assert(!piles_[curr_move.from].exposed.empty());
@@ -760,7 +759,7 @@ void AgnesState::UndoMoveToFoundation(const Move & curr_move,
 }
 
 void AgnesState::DealMove(const Deck &deck,
-                          std::array<LastMoveInfo, N_PILE>& last_move_info,
+                          std::array<LastMoveInfo, kNPile>& last_move_info,
                           const SetNMovableOpts & snm_opts,
                           const EmptyRule & enum_to_empty_pile) {
   assert(n_stock_left_ > 0);
@@ -880,7 +879,7 @@ void AgnesState::UndoTableauMove(const Move & curr_move,
 }
 
 void AgnesState::TableauMove(const Move & curr_move,
-                         std::array<LastMoveInfo, N_PILE>& last_move_info,
+                         std::array<LastMoveInfo, kNPile>& last_move_info,
                          const SetNMovableOpts & snm_opts,
                          const EmptyRule & enum_to_empty_pile) {
   assert(piles_[curr_move.from].exposed.size() >= curr_move.n_cards);
@@ -981,9 +980,8 @@ bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
   }
 }
 
-void AgnesState::set_sort_order(EmptyRule move_to_empty_pile)
-{
-  array<AgnesPile, N_PILE> &piles = piles_;
+void AgnesState::set_sort_order(EmptyRule move_to_empty_pile) {
+  array<AgnesPile, kNPile> &piles = piles_;
   for (std::size_t i=0; i<sort_order_.size(); ++i) {
     sort_order_[i]=i;
   }
@@ -1004,8 +1002,7 @@ void AgnesState::set_sort_order(EmptyRule move_to_empty_pile)
 //------------------------------------------------------------------------------
 // PRIVATE CLASS FUNCTIONS
 //------------------------------------------------------------------------------
-void AgnesState::PrintFoundation()
-{
+void AgnesState::PrintFoundation() const {
   cout << "Foundations:[";
   for (std::size_t i=0; i<foundation_.size()-1; ++i) {
     cout << foundation_[i] << ", ";
@@ -1013,7 +1010,7 @@ void AgnesState::PrintFoundation()
   cout << foundation_[foundation_.size()-1] << "]\n";
 }
 
-void AgnesState::PrintValidMoves(const std::vector<Move> &valid_moves) {
+void AgnesState::PrintValidMoves(const std::vector<Move> &valid_moves) const {
   cout << "[";
   for (auto it = valid_moves.begin(); it != valid_moves.end(); ++it) {
     if (it != valid_moves.begin()) {
@@ -1065,26 +1062,26 @@ void AgnesState::PrintValidMoves(const std::vector<Move> &valid_moves) {
   cout << "]";
 }
 
-void AgnesState::PrintInSuitSeq() {
+void AgnesState::PrintInSuitSeq() const {
   cout << "in_suit_seq:";
-  for (int i=0; i<N_RANK; ++i) {
-    for (int j=0; j<N_SUIT; ++j) {
+  for (int i=0; i<kNRank; ++i) {
+    for (int j=0; j<kNSuit; ++j) {
       cout << in_suit_seq_[i][j];
     }
-    if (i<N_RANK-1) cout << " ";
+    if (i<kNRank-1) cout << " ";
   }
   cout << "\n";
   cout << "last_in_pile:";
-  for (int i=0; i<N_RANK; ++i) {
-    for (int j=0; j<N_SUIT; ++j) {
+  for (int i=0; i<kNRank; ++i) {
+    for (int j=0; j<kNSuit; ++j) {
       cout << last_in_pile_[i][j];
     }
-    if (i<N_RANK-1) cout << " ";
+    if (i<kNRank-1) cout << " ";
   }
   cout << "\n";
 }
 
-void AgnesState::PrintTableau() {
+void AgnesState::PrintTableau() const {
   for (PileSizeType i=0; i<piles_.size(); ++i) {
     cout << "T" << i << ":[";
     for (auto it = piles_[i].hidden.begin();
