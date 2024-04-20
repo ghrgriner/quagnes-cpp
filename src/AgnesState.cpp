@@ -47,6 +47,11 @@
 //   parameter from IsDealForced and simplify the logic so that we no longer
 //   force deal if !split_empty_stock and the 1-lower next suit is in-suit
 //   sequence.
+// [20230420] (1a) Change hash_ attribute to compstr_ and UpdateHash to
+//   UpdateCompStr since there is no information loss when we compress.
+//   (1b) Build compstr_ using push_back() instead of ostream; (1c) pass
+//   face_up parameter to UpdateCompStr so that we don't waste memory on the
+//   pile-markers of the hidden piles when we know they are empty.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -157,7 +162,7 @@ AgnesState::AgnesState()
       //sort_order_(),
       is_loop_(false),
       is_loser_(false),
-      hash_()
+      compstr_()
 {
   for (std::size_t i=0; i<foundation_.size(); ++i) {
     foundation_[i]=-1;
@@ -209,8 +214,8 @@ bool AgnesState::is_loser() const {
   return is_loser_;
 }
 
-string AgnesState::hash() const {
-  return hash_;
+string AgnesState::compstr() const {
+  return compstr_;
 }
 
 // Simple setters
@@ -269,24 +274,28 @@ string AgnesState::ToUncompStr() const {
   return retoss.str();
 }
 
-void AgnesState::UpdateHash() {
-  std::ostringstream retoss;
+void AgnesState::UpdateCompStr(bool face_up) {
+  compstr_.clear();
+  compstr_.push_back(n_stock_left_);
 
-  retoss << (n_stock_left_);
+  //retoss << (n_stock_left_);
   for (PileSizeType pile_index=0; pile_index<kNPile; ++pile_index) {
     //for (const AgnesPile& pile : piles_) {
     AgnesPile& pile = piles_[sort_order_[pile_index]];
     //AgnesPile& pile = piles_[pile_index];
-    retoss << "#";
+    compstr_.push_back('#');
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
-      retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
+      compstr_.push_back(48+(it->suit)*kNRank+(it->rank));
+      //retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
     }
-    retoss << "#";
-    for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
-      retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
+    if (!face_up) {
+      compstr_.push_back('#');
+      for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
+        compstr_.push_back(48+(it->suit)*kNRank+(it->rank));
+        //retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
+      }
     }
   }
-  hash_ = retoss.str();
 }
 
 bool AgnesState::IsAnyPileBlocked() const {

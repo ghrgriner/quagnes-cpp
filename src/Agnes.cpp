@@ -29,6 +29,10 @@
 // overflow. Is set to kNStatesMax when max_states_=0.
 // (1) Change C-style define constants to const variables. (2) Mark other
 // functions as const as appropriate.
+// [20230420] (1a) Change hash_ attribute to compstr_ and UpdateHash to
+//   UpdateCompStr since there is no information loss when we compress.
+//   (1b) pass face_up parameter to UpdateCompStr so that we don't waste memory
+//   on the pile-markers of the hidden piles when we know they are empty.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -302,10 +306,9 @@ void Agnes::UndoMove(const bool &no_print) {
 
   if (check_for_loops_) {
     if (!curr_state_.is_loop()) {
-      auto it = check_loops_.find(curr_state_.hash());
+      auto it = check_loops_.find(curr_state_.compstr());
       assert(it != check_loops_.end());
       check_loops_.erase(it);
-      //check_loops_.erase(curr_state_.hash());
     }
   }
   curr_state_.set_is_loop(false);
@@ -322,7 +325,7 @@ void Agnes::UndoMove(const bool &no_print) {
     curr_state_.UndoTableauMove(curr_move, snm_opts, enum_to_empty_pile_);
   }
 
-  curr_state_.UpdateHash();
+  curr_state_.UpdateCompStr(face_up_);
 
   if (moves_.size()) {
     curr_state_.set_curr_move(Move(moves_.top()));
@@ -362,7 +365,7 @@ int Agnes::PerformMove()
     //if (curr_state_.n_stock_left() >= track_threshold_) {
     if (curr_state_.n_stock_left() >= track_threshold_
         && !curr_state_.is_loser()) {
-      losing_states_.insert(curr_state_.hash());
+      losing_states_.insert(curr_state_.compstr());
     }
     ++n_no_move_possible_;
     UndoMove(false);
@@ -400,13 +403,13 @@ int Agnes::PerformMove()
                               enum_to_empty_pile_);
     }
 
-    curr_state_.UpdateHash();
+    curr_state_.UpdateCompStr(face_up_);
     curr_state_.ClearValidMoves();
 
     curr_state_.set_is_loop(false);
     curr_state_.set_is_loser(false);
     if (check_for_loops_) {
-      auto ret = check_loops_.insert(curr_state_.hash());
+      auto ret = check_loops_.insert(curr_state_.compstr());
       if (!ret.second) curr_state_.set_is_loop(true);
     }
 
@@ -417,7 +420,7 @@ int Agnes::PerformMove()
       }
     }
     else if (curr_state_.n_stock_left() >= track_threshold_
-        && losing_states_.find(curr_state_.hash()) != losing_states_.end()) {
+        && losing_states_.find(curr_state_.compstr()) != losing_states_.end()) {
       curr_state_.set_is_loser(true);
       curr_state_.ClearValidMoves();
       if (print_states_) {
