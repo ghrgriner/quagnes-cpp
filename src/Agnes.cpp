@@ -33,6 +33,7 @@
 //   UpdateCompStr since there is no information loss when we compress.
 //   (1b) pass face_up parameter to UpdateCompStr so that we don't waste memory
 //   on the pile-markers of the hidden piles when we know they are empty.
+//   (2) Add enum_to_empty_pile parameter to UpdateCompStr
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -325,7 +326,7 @@ void Agnes::UndoMove(const bool &no_print) {
     curr_state_.UndoTableauMove(curr_move, snm_opts, enum_to_empty_pile_);
   }
 
-  curr_state_.UpdateCompStr(face_up_);
+  curr_state_.UpdateCompStr(face_up_, enum_to_empty_pile_);
 
   if (moves_.size()) {
     curr_state_.set_curr_move(Move(moves_.top()));
@@ -403,7 +404,7 @@ int Agnes::PerformMove()
                               enum_to_empty_pile_);
     }
 
-    curr_state_.UpdateCompStr(face_up_);
+    curr_state_.UpdateCompStr(face_up_, enum_to_empty_pile_);
     curr_state_.ClearValidMoves();
 
     curr_state_.set_is_loop(false);

@@ -175,7 +175,7 @@ class AgnesState {
     void Print() const;
     // Compressed string representation of the state.
     // Stored in `Agnes.losing_states` attribute.
-    void UpdateCompStr(bool face_up);
+    void UpdateCompStr(bool face_up, EmptyRule enum_to_empty_pile);
     // Uncompressed string representation of the state used in Print().
     std::string ToUncompStr() const;
     AgnesState(const AgnesState& other) = default;

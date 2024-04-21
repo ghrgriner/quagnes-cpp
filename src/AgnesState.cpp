@@ -52,6 +52,11 @@
 //   (1b) Build compstr_ using push_back() instead of ostream; (1c) pass
 //   face_up parameter to UpdateCompStr so that we don't waste memory on the
 //   pile-markers of the hidden piles when we know they are empty.
+//   (2a) Change pile_less so that empty piles are always at the end.
+//   (2b) UpdateCompStr: use highest bit of byte to indicate a card starts a
+//   pile. When an empty pile is found and we know all later piles must be
+//   empty (ie, n_stock_left == 0 or (n_stock_left == 2 and pile_index > 1),
+//   no longer write markers for empty piles.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -80,8 +85,8 @@ static bool IsLastDealBlocked(const array<LastMoveInfo,
                               kNPile>& last_move_info);
 
 static string DescribeMove(const Move &move);
-//bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
-//         int int_right, const AgnesPile &right);
+bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
+         int int_right, const AgnesPile &right);
 
 //------------------------------------------------------------------------------
 // STATIC FUNCTIONS
@@ -274,7 +279,8 @@ string AgnesState::ToUncompStr() const {
   return retoss.str();
 }
 
-void AgnesState::UpdateCompStr(bool face_up) {
+void AgnesState::UpdateCompStr(bool face_up,
+                               EmptyRule enum_to_empty_pile) {
   compstr_.clear();
   compstr_.push_back(n_stock_left_);
 
@@ -283,10 +289,25 @@ void AgnesState::UpdateCompStr(bool face_up) {
     //for (const AgnesPile& pile : piles_) {
     AgnesPile& pile = piles_[sort_order_[pile_index]];
     //AgnesPile& pile = piles_[pile_index];
-    compstr_.push_back('#');
+    uint8_t first_card = 128;
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
-      compstr_.push_back(48+(it->suit)*kNRank+(it->rank));
+      // set the first bit to mark the first card in a pile.
+      compstr_.push_back(first_card | (48+(it->suit)*kNRank+(it->rank)));
+      if (first_card) first_card = 0;
       //retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
+    }
+    if (first_card) {
+      compstr_.push_back(first_card);
+      // piles are sorted so that all empty piles are at the end when they
+      // cannot be covered by a future deal. When this occurs, we can break
+      // as we know all future piles must be empty.
+      if ((!n_stock_left_ || (n_stock_left_ == 2 && pile_index>1))
+          && enum_to_empty_pile != EmptyRule::None) {
+        break;
+      }
+      else {
+        compstr_.push_back(first_card);
+      }
     }
     if (!face_up) {
       compstr_.push_back('#');
@@ -969,7 +990,7 @@ bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
       val_left = left.exposed[0].rank*4+left.exposed[0].suit + 1;
     }
     else {
-      val_left = 0;
+      val_left = 60;
     }
     if (right.hidden.size()) {
       val_right = right.hidden[0].rank*4+right.hidden[0].suit + 1;
@@ -978,9 +999,9 @@ bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
       val_right = right.exposed[0].rank*4+right.exposed[0].suit + 1;
     }
     else {
-      val_right = 0;
+      val_right = 60;
     }
-    if (!val_left && !val_right) {
+    if (val_left == 60 && val_right == 60) {
       return (int_left < int_right);
     }
     else {
