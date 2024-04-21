@@ -40,6 +40,7 @@
 //   (1b) Build compstr_ using push_back() instead of ostream; (1c) pass
 //   face_up parameter to UpdateCompStr so that we don't waste memory on the
 //   pile-markers of the hidden piles when we know they are empty.
+// [20230421] Add `CalculateMaxPossibleScore` declaration.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNESSTATE_H
@@ -204,6 +205,29 @@ class AgnesState {
     void set_is_loop(bool value);
     void set_is_loser(bool value);
     void set_curr_move(const Move &);
+
+    // Calculate the maximum possible score from the initial tableau layout
+    //  
+    // 1. If enum_to_empty_pile != EmptyRule::None, return 52, otherwise...
+    // 2. Make a graph showing which suits are blocked by which kings in the
+    //    tableau.
+    // 3. Make a list of the suits corresponding to vertices that are in cycles
+    //    in the graph. Kings of these suits can never be put into the
+    //    foundation.
+    // 4. Make min_blocked[suit]: the lowest-rank card blocked by such kings.
+    //    If no cards are blocked, min_blocked[suit] = 13.
+    // 5. return max_possible_score = 52 - sum(13 - min_blocked[suit])
+    //
+    // Arguments
+    // ---------
+    // enum_to_empty_pile : EmptyRule
+    //     `Agnes.enum_to_empty_pile`
+    // 
+    // Returns
+    // -------
+    // Integer as described above
+    //-------------------------------------------------------------------------
+    int CalculateMaxPossibleScore(const EmptyRule & enum_to_empty_pile);
 
     // Set piles_[pile_index].n_movable
     //
@@ -493,6 +517,8 @@ class AgnesState {
     void PrintInSuitSeq() const;
     void PrintValidMoves(const std::vector<Move> &valid_moves) const;
     void PrintFoundation() const;
+    void InitBlockGraph(std::array<std::array<bool, kNSuit>,
+                        kNSuit>& graph) const;
 };
 
 } // namespace quagnes

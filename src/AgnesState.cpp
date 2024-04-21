@@ -80,6 +80,11 @@ static bool visit(const int vertex,
        const std::array<std::array<bool, kNSuit>, kNSuit>& g,
        std::array<bool, kNSuit>& current_path,
        std::array<bool, kNSuit>& visited);
+static void visit_any_cycle(const int vertex,
+       const std::array<std::array<bool, kNSuit>, kNSuit>& g,
+       std::vector<int>& current_path,
+       std::array<int, kNSuit>& visited,
+       std::array<bool, kNSuit>& in_any_cycle);
 static bool cyclic(const std::array<std::array<bool, kNSuit>, kNSuit>& g);
 static bool IsLastDealBlocked(const array<LastMoveInfo,
                               kNPile>& last_move_info);
@@ -152,6 +157,32 @@ static bool cyclic(const std::array<std::array<bool, kNSuit>, kNSuit>& g) {
     if (cycle) return true;
   }
   return cycle;
+}
+
+static void visit_any_cycle(const int vertex,
+       const std::array<std::array<bool, kNSuit>, kNSuit>& g,
+       std::vector<int>& current_path,
+       std::array<int, kNSuit>& visited,
+       std::array<bool, kNSuit>& in_any_cycle) {
+  if (visited[vertex] == 2) return;
+  else if (visited[vertex] == 1) {
+    assert(!current_path.empty());
+    in_any_cycle[vertex] = true;
+    for (int i=current_path.size()-1; i>=0; --i) {
+      if (current_path[i]==vertex) return;
+      else in_any_cycle[current_path[i]] = true;
+    }
+  } else {
+    visited[vertex]=1;
+    current_path.push_back(vertex);
+
+    for (int neighbor=0; neighbor<kNSuit; ++neighbor) {
+      if (!g[vertex][neighbor]) continue;   // not a neighbor
+      visit_any_cycle(neighbor, g, current_path, visited, in_any_cycle);
+    }
+    visited[vertex] = 2;
+    current_path.pop_back();
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -319,11 +350,8 @@ void AgnesState::UpdateCompStr(bool face_up,
   }
 }
 
-bool AgnesState::IsAnyPileBlocked() const {
-  std::array<std::array<bool, kNSuit>, kNSuit> graph = {
-      false, false, false, false, false, false, false, false,
-      false, false, false, false, false, false, false, false};
-
+void AgnesState::InitBlockGraph(
+    std::array<std::array<bool, kNSuit>, kNSuit> &graph) const {
   for (const AgnesPile& pile: piles_) {
     PileSizeType hSize=pile.hidden.size();
     PileSizeType pSize=pile.exposed.size();
@@ -355,6 +383,65 @@ bool AgnesState::IsAnyPileBlocked() const {
       } // end loop over piles_.hidden
     }
   }
+}
+
+int AgnesState::CalculateMaxPossibleScore(const EmptyRule& enum_to_empty_pile) {
+  int max_possible_score = 52;
+  if (enum_to_empty_pile != EmptyRule::None) return max_possible_score;
+
+  std::array<bool, kNSuit> in_any_cycle = {false, false, false, false};
+  std::array<int, kNSuit> min_rank_blocked = {13, 13, 13, 13};
+
+  {
+    std::array<std::array<bool, kNSuit>, kNSuit> graph = {
+        false, false, false, false, false, false, false, false,
+        false, false, false, false, false, false, false, false};
+    InitBlockGraph(graph);
+
+    {
+      std::array<int, kNSuit> visited = {0, 0, 0, 0};
+
+      for (int v=0; v<kNSuit; ++v) {
+        assert(visited[v] == 0 || visited[v] == 2);
+        std::vector<int> current_path = {};
+        visit_any_cycle(v, graph, current_path, visited, in_any_cycle);
+      }
+    }
+  }
+  
+  for (const AgnesPile& pile: piles_) {
+    bool blocked = false;
+
+    if (pile.exposed.empty()) continue;
+    for (int card_index = pile.exposed.size() - 1; card_index >= 0;
+         --card_index) {
+      if (pile.exposed[card_index].rank == 12
+          && in_any_cycle[pile.exposed[card_index].suit]) blocked = true;
+      if (blocked) min_rank_blocked[pile.exposed[card_index].suit] =
+        std::min(min_rank_blocked[pile.exposed[card_index].suit],
+                 pile.exposed[card_index].rank);
+    }
+    for (int card_index = pile.hidden.size() - 1; card_index >= 0;
+         --card_index) {
+      if (pile.hidden[card_index].rank == 12
+          && in_any_cycle[pile.hidden[card_index].suit]) blocked = true;
+      if (blocked) min_rank_blocked[pile.hidden[card_index].suit] =
+        std::min(min_rank_blocked[pile.hidden[card_index].suit],
+                 pile.hidden[card_index].rank);
+    }
+  }
+
+  for (const int min_blocked : min_rank_blocked) {
+    max_possible_score -= (13 - min_blocked);
+  }
+  return max_possible_score;
+}
+
+bool AgnesState::IsAnyPileBlocked() const {
+  std::array<std::array<bool, kNSuit>, kNSuit> graph = {
+      false, false, false, false, false, false, false, false,
+      false, false, false, false, false, false, false, false};
+  InitBlockGraph(graph);
   return cyclic(graph);
 }
 

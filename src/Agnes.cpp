@@ -34,6 +34,7 @@
 //   (1b) pass face_up parameter to UpdateCompStr so that we don't waste memory
 //   on the pile-markers of the hidden piles when we know they are empty.
 //   (2) Add enum_to_empty_pile parameter to UpdateCompStr
+// [20230421] Add call to CalculateMaxPossibleScore
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -84,7 +85,8 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
       // loop in the tableau, so we don't need to check for loops
       check_for_loops_(agnes_options.split_runs
                        || (enum_to_empty_pile_!= EmptyRule::None)),
-      moves_left_()
+      moves_left_(),
+      max_possible_score_(52)
 {
   if (print_states_) {
     cout << "Start Agnes()\n";
@@ -178,6 +180,8 @@ int Agnes::Play() {
       curr_state_.DealOntoPile(j, deck_, (face_up_ or j==i));
     }
   }
+  max_possible_score_ = curr_state_.CalculateMaxPossibleScore(
+      enum_to_empty_pile_);
 
   const SetNMovableOpts snm_opts (move_same_suit_, split_runs_,
                   split_empty_stock_);
@@ -217,6 +221,8 @@ int Agnes::Play() {
 
 void Agnes::SummarizeState() const {
   std::cerr << "Processed " << n_states_checked_ << "|";
+  std::cerr << max_possible_score_ << "|";
+  std::cerr << max_score_ << "|";
   std::cerr << all_valid_moves_.size();
   std::cerr << "|";
   for (const auto& elem  : moves_left_) {
@@ -360,6 +366,9 @@ int Agnes::PerformMove()
   // Lost the game!
   if (curr_state_.depth()==0 && n_valid_moves==0) {
     ++n_no_move_possible_;
+    return 2;
+  }
+  else if (max_score_ == max_possible_score_) {
     return 2;
   }
   else if (n_valid_moves==0) {

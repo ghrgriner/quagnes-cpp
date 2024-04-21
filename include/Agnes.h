@@ -271,6 +271,10 @@ class Agnes {
     std::array<int, kNToTrack> moves_left_;
     // Minimum of max_states_ (if max_states_ > 0) and INT_MAX (if == 0)
     StatesType max_states_guard_;
+    // Maximum possible score (52, unless move_to_empty_pile == "none"), in
+    // which case it is calculated from which cards are blocked in the
+    // initial tableau layout.
+    int max_possible_score_;
 
     //-------------------------------------------------------------------------
     // Read deck from input file, one card per line where card='(rank, suit)'
