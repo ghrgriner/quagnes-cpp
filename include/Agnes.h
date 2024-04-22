@@ -25,6 +25,7 @@
 // overflow and macro variable kNStatesMax with the maximum.
 // [20240416RG] (1) Switch C-style #define constants to const variables.
 // (2) Make mark appropriate functions as const.
+// [20240421RG] Add `max_possible_score` stack as attribute.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
@@ -273,8 +274,9 @@ class Agnes {
     StatesType max_states_guard_;
     // Maximum possible score (52, unless move_to_empty_pile == "none"), in
     // which case it is calculated from which cards are blocked in the
-    // initial tableau layout.
-    int max_possible_score_;
+    // tableau. This is a stack with an element for every deal (including the
+    // initial deal).
+    std::stack<int> max_possible_score_;
 
     //-------------------------------------------------------------------------
     // Read deck from input file, one card per line where card='(rank, suit)'

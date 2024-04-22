@@ -93,7 +93,7 @@ fmt.pval <- function(p.value) {
 }
 
 analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
-                    rule_footnote = NULL) {
+                    rule_footnote = NULL, filemax = NULL) {
     if (!is.null(file) && !file.exists(file)) {
         stop(paste("analyze: file does not exist: ", file))
     }
@@ -187,6 +187,41 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
     out_str = sprintf("| %.1f", max(stchk)/1000000)
     to_output(formatC(out_str, width=-10))
 
+    if (!is.null(filemax)) {
+        dfmax = read.csv(filemax)
+        score = dfmax$max_score
+        stmax = dfmax$n_states_checked
+        diff.rc = (dfmax$rc != df$rc)
+        if (any(diff.rc)) {
+           cat(sprintf("WARNING: %s: %d record(s) with different return codes in file and filemax\n",
+               rule, sum(diff.rc, na.rm=TRUE)), sep='')
+        }
+    }
+    else {
+        score = df$max_score
+    }
+
+    cat("\nScore:\n")
+    hist(score, main=rule)
+    cat(paste0("Mean (SD): ", mean(score), " (", sd(score), ")\n"))
+    cat(paste0("Max: ", max(score), "\n"))
+    out_str = sprintf("| %.1f (%.1f) ", mean(score), sd(score))
+    to_output(formatC(out_str, width=-14))
+
+    if (!is.null(filemax)) {
+        cat("\nStates checked (when maximize_score=true):\n")
+        cat(paste0("Mean (SD): ", mean(stmax), " (", sd(stmax), ")\n"))
+        cat(paste0("Max: ", max(stmax), "\n"))
+        out_str = sprintf("| %.1f (%.1f) ", mean(stmax)/1000, sd(stmax)/1000)
+        to_output(formatC(out_str, width=-20))
+        out_str = sprintf("| %.1f", max(stmax)/1000000)
+        to_output(formatC(out_str, width=-10))
+    }
+    else {
+        out_str = "| NA                | NA      "
+        to_output(out_str)
+    }
+
     to_output("|\n")
     #print(df)
 }
@@ -205,18 +240,24 @@ print_table_header <- function() {
     to_output("other footnotes as needed):\n\n")
     to_output("| Rule Variant               | Completed Simulations, (n) |")
     to_output(" Wins, n (% [95% CI]) | P-value [a] |")
-    to_output(" Mean (SD) States Examined (10^3) |")
-    to_output(" Maximum States Examined (10^6) |\n")
+    to_output(" Mean (SD) States Examined (10^3) [b] |")
+    to_output(" Maximum States Examined (10^6) [b] |")
+    to_output(" Mean (SD) Best Possible Score |")
+    to_output(" Mean (SD) States Examined (10^3) [c] |")
+    to_output(" Maximum States Examined (10^6) [c] |\n")
 
     to_output("| :------------------------- | :---------: |")
     to_output(" :-------------------------: | :-----: | :---------------: |")
-    to_output(" :-----: |\n")
+    to_output(" :-----: | :----: | :----: | :----: |\n")
 }
 
 cat("", file=output.file)
 print_table_header()
 
-rdir = "../tests/"
+# Directory for regular results
+rdir = "../../notgit/v1.1.0/tests/"
+# Directory for results using `maximize_score=true`
+mdir = "../tests/max_10k/"
 
 #-------------------------------------------------------------------------------
 # First do some manual work for the Up-Color-HighRun rules, which has a few
@@ -235,17 +276,22 @@ df.up_color_highrun = rbind(
     df.up_color_highrun_5912,
     df.up_color_highrun_9901)
 
-analyze(file=paste0(rdir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None")
-analyze(file=paste0(rdir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None")
-analyze(file=paste0(rdir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit")
-analyze(data=df.up_color_highrun,                         emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="b")
+analyze(file=paste0(rdir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None",
+        filemax=paste0(mdir, "down_color_none_max.out"))
+analyze(file=paste0(rdir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None",
+        filemax=paste0(mdir, "up_color_none_max.out"))
+analyze(file=paste0(rdir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit",
+        filemax=paste0(mdir, "up_color_none_nosplit_max.out"))
+analyze(data=df.up_color_highrun,                          emptyrule="high run", rule="Up-Color-HighRun", rule_footnote="b")
 analyze(file=paste0(rdir, "up_color_highrun_nosplit.out"), emptyrule="high run", rule="Up-Color-HighRun-NoSplit")
-analyze(file=paste0(rdir, "up_color_anyrun.out"),          emptyrule="none",     rule="Up-Color-AnyRun")
-analyze(file=paste0(rdir, "up_color_anyrun_nosplit.out"),  emptyrule="none",     rule="Up-Color-AnyRun-NoSplit")
-analyze(file=paste0(rdir, "dalton_none.out"),              emptyrule="none",     rule="Up-Suit-None")
-analyze(file=paste0(rdir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit")
+analyze(file=paste0(rdir, "up_color_anyrun.out"),          emptyrule="any run",  rule="Up-Color-AnyRun")
+analyze(file=paste0(rdir, "up_color_anyrun_nosplit.out"),  emptyrule="any run",  rule="Up-Color-AnyRun-NoSplit")
+analyze(file=paste0(rdir, "dalton_none.out"),              emptyrule="none",     rule="Up-Suit-None",
+        filemax=paste0(mdir, "dalton_none_max.out"))
+analyze(file=paste0(rdir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit",
+        filemax=paste0(mdir, "parlett_max.out"))
 analyze(file=paste0(rdir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
 analyze(file=paste0(rdir, "dalton_highrun_nosplit.out"),   emptyrule="high run", rule="Up-Suit-HighRun-NoSplit")
-analyze(file=paste0(rdir, "dalton_anyrun.out"),            emptyrule="high run", rule="Up-Suit-AnyRun")
+analyze(file=paste0(rdir, "dalton_anyrun.out"),            emptyrule="any run",  rule="Up-Suit-AnyRun")
 analyze(file=paste0(rdir, "dalton_anyrun_nosplit.out"),    emptyrule="any run",  rule="Up-Suit-AnyRun-NoSplit")
 

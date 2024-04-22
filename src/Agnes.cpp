@@ -34,7 +34,8 @@
 //   (1b) pass face_up parameter to UpdateCompStr so that we don't waste memory
 //   on the pile-markers of the hidden piles when we know they are empty.
 //   (2) Add enum_to_empty_pile parameter to UpdateCompStr
-// [20230421] Add call to CalculateMaxPossibleScore
+// [20230421] Add call to CalculateMaxPossibleScore after a deal (including
+//   initial).
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -86,7 +87,7 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
       check_for_loops_(agnes_options.split_runs
                        || (enum_to_empty_pile_!= EmptyRule::None)),
       moves_left_(),
-      max_possible_score_(52)
+      max_possible_score_()
 {
   if (print_states_) {
     cout << "Start Agnes()\n";
@@ -180,8 +181,8 @@ int Agnes::Play() {
       curr_state_.DealOntoPile(j, deck_, (face_up_ or j==i));
     }
   }
-  max_possible_score_ = curr_state_.CalculateMaxPossibleScore(
-      enum_to_empty_pile_);
+  if (maximize_score_) max_possible_score_.push(
+         curr_state_.CalculateMaxPossibleScore(enum_to_empty_pile_));
 
   const SetNMovableOpts snm_opts (move_same_suit_, split_runs_,
                   split_empty_stock_);
@@ -221,7 +222,9 @@ int Agnes::Play() {
 
 void Agnes::SummarizeState() const {
   std::cerr << "Processed " << n_states_checked_ << "|";
-  std::cerr << max_possible_score_ << "|";
+  if (maximize_score_) {
+    std::cerr << max_possible_score_.top() << "|";
+  }
   std::cerr << max_score_ << "|";
   std::cerr << all_valid_moves_.size();
   std::cerr << "|";
@@ -327,6 +330,10 @@ void Agnes::UndoMove(const bool &no_print) {
   }
   else if (curr_move.movetype == Moves::Deal) {
     curr_state_.UndoDeal(snm_opts, enum_to_empty_pile_);
+    if (maximize_score_) {
+        assert(!max_possible_score_.empty());
+        max_possible_score_.pop();
+    }
   }
   else if (curr_move.movetype == Moves::InTableau) {
     curr_state_.UndoTableauMove(curr_move, snm_opts, enum_to_empty_pile_);
@@ -364,14 +371,14 @@ int Agnes::PerformMove()
   int n_valid_moves = valid_moves.size();
 
   // Lost the game!
-  if (curr_state_.depth()==0 && n_valid_moves==0) {
+  if (curr_state_.depth()==0
+      && (n_valid_moves==0 ||
+         (maximize_score_ && max_score_ >= max_possible_score_.top()))) {
     ++n_no_move_possible_;
     return 2;
   }
-  else if (max_score_ == max_possible_score_) {
-    return 2;
-  }
-  else if (n_valid_moves==0) {
+  else if (n_valid_moves==0
+           || (maximize_score_ && max_score_ >= max_possible_score_.top())) {
     //if (curr_state_.n_stock_left() >= track_threshold_) {
     if (curr_state_.n_stock_left() >= track_threshold_
         && !curr_state_.is_loser()) {
@@ -405,6 +412,10 @@ int Agnes::PerformMove()
       curr_state_.DealMove(deck_, last_move_info, snm_opts, enum_to_empty_pile_);
       if (enum_to_empty_pile_ == EmptyRule::None && !maximize_score_) {
         any_pile_blocked = curr_state_.IsAnyPileBlocked();
+      }
+      else if (maximize_score_) {
+        max_possible_score_.push(curr_state_.CalculateMaxPossibleScore(
+            enum_to_empty_pile_));
       }
     }
     else if (curr_move.movetype == Moves::InTableau) {
