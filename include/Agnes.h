@@ -26,13 +26,15 @@
 // [20240416RG] (1) Switch C-style #define constants to const variables.
 // (2) Make mark appropriate functions as const.
 // [20240421RG] Add `max_possible_score` stack as attribute.
+// [20240422RG] Make `check_loops_` and `losing_states_` unordered sets instead
+//   of sets.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
 #define _QUAGNES_AGNES_H
 
 #include <string>
-#include <set>
+#include <unordered_set>
 #include <stack>
 #include <cstdint>
 
@@ -252,10 +254,10 @@ class Agnes {
     std::stack<std::array<LastMoveInfo, kNPile>> all_lmi_;
     // Set containing game states that have been observed in the current path
     // through the game in order to prevent loops.
-    std::set<std::string> check_loops_;
+    std::unordered_set<std::string> check_loops_;
     // Set containing game states that are known to be losers. This can get
     // quite large.
-    std::set<std::string> losing_states_;
+    std::unordered_set<std::string> losing_states_;
 
     // convert move_to_empty_pile_ to an enum
     EmptyRule enum_to_empty_pile_;
