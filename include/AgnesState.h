@@ -41,6 +41,10 @@
 //   face_up parameter to UpdateCompStr so that we don't waste memory on the
 //   pile-markers of the hidden piles when we know they are empty.
 // [20230421] Add `CalculateMaxPossibleScore` declaration.
+// [20230423] Made Card a class. Added `value` attribute and IsSameSuit()
+//   and IsSameColor() functions that take a reference to another card as
+//   parameter. The value of the card is now represented in a single uint8_t
+//   instead of an int for rank and suit.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNESSTATE_H
@@ -51,6 +55,7 @@
 #include <set>
 #include <stack>
 #include <array>
+#include <cstdint>
 
 namespace quagnes {
 
@@ -61,17 +66,26 @@ const int kNPile = 7;
 const int kNCard = 52;
 
 // A playing card.
-struct Card {
-  int rank; // valid values: 0-12
-  // suit valid values: 0-3. ({0,2} and {1,3} are defined to be the same color)
-  int suit;
-  Card() : rank(0), suit(0) {}
-  Card(int rank, int suit) : rank(rank), suit(suit) {}
-  // return the other suit of the same color as an int
+class Card {
 
-  int same_color_suit() const {
-    return ((suit + 2) % 4);
-  }
+  public:
+    Card() : value_(99) {}
+    Card(int rank, int suit) : value_(suit*16+rank) {}
+
+    void set_value(int rank, int suit);
+    bool IsSameSuit(Card & other) const;
+    bool IsSameColor(Card & other) const;
+    bool IsSameColor(const Card & other) const;
+    // rank is 0-13
+    int rank() const;
+    // suit is 0-4, where {0,2} and {1,3} are the same color
+    int suit() const;
+    uint8_t value() const;
+    // return the other suit of the same color as an int
+    // return (((value_ >> 4) + 2) % 4) is faster??
+    int same_color_suit() const;
+  private:
+    uint8_t value_;
 };
 
 // 1:1 mapping between string in `Agnes.move_to_empty_pile_` and these values
@@ -207,7 +221,7 @@ class AgnesState {
     void set_curr_move(const Move &);
 
     // Calculate the maximum possible score from the initial tableau layout
-    //  
+    //
     // 1. If enum_to_empty_pile != EmptyRule::None, return 52, otherwise...
     // 2. Make a graph showing which suits are blocked by which kings in the
     //    tableau.
@@ -222,7 +236,7 @@ class AgnesState {
     // ---------
     // enum_to_empty_pile : EmptyRule
     //     `Agnes.enum_to_empty_pile`
-    // 
+    //
     // Returns
     // -------
     // Integer as described above

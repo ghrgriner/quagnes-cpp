@@ -150,8 +150,9 @@ void Agnes::InitializeDeckFromFile(const string &deck_filename) {
     int line_ctr = 0;
     while (std::getline(infile, line))
     {
-      initial_deck_[line_ctr].rank = std::stoi(line.substr(1,2), NULL);
-      initial_deck_[line_ctr].suit = std::stoi(line.substr(5,1), NULL);
+      initial_deck_[line_ctr].set_value(
+          std::stoi(line.substr(1,2), NULL),
+          std::stoi(line.substr(5,1), NULL));
       ++line_ctr;
     }
   }
@@ -167,10 +168,10 @@ int Agnes::Play() {
 
   // reset the indexing of all cards so base card has rank 0
   for (i=0; i<kNCard; ++i) {
-    deck_[i].rank = ((initial_deck_[i].rank - initial_deck_[0].rank)
+    int rank = ((initial_deck_[i].rank() - initial_deck_[0].rank())
              % kNRank);
-    if (deck_[i].rank < 0) deck_[i].rank += kNRank;
-    deck_[i].suit=initial_deck_[i].suit;
+    if (rank < 0) rank += kNRank;
+    deck_[i].set_value(rank, initial_deck_[i].suit());
   }
   curr_state_.SetLastCards(deck_);
 
@@ -485,7 +486,7 @@ void Agnes::PrintDeck() const {
     if (it!=initial_deck_.begin()) {
       cout << ", ";
     }
-    cout << "(" << it->rank << ", " << it-> suit << ")";
+    cout << "(" << it->rank() << ", " << it->suit() << ")";
   }
   cout << "]" << "\n";
 }

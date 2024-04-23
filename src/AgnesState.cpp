@@ -57,6 +57,7 @@
 //   pile. When an empty pile is found and we know all later piles must be
 //   empty (ie, n_stock_left == 0 or (n_stock_left == 2 and pile_index > 1),
 //   no longer write markers for empty piles.
+// [20230423] Made Card a class. Move function definitions to this file.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -216,16 +217,16 @@ AgnesState::AgnesState()
 
 void AgnesState::SetLastCards(const std::array<Card, kNCard> & deck) {
   // no need to keep the last two cards in order here and it's better
-  if (deck[kNCard-1].rank < deck[kNCard-2].rank) {
+  if (deck[kNCard-1].rank() < deck[kNCard-2].rank()) {
     lower_last_ = deck[kNCard-1];
     upper_last_ = deck[kNCard-2];
   } else {
     lower_last_ = deck[kNCard-2];
     upper_last_ = deck[kNCard-1];
   }
-  last_same_suit_seq_ = (lower_last_.suit == upper_last_.suit
-      && lower_last_.rank + 1 == upper_last_.rank);
-  last_same_color_not_suit_ = (lower_last_.suit
+  last_same_suit_seq_ = (lower_last_.suit() == upper_last_.suit()
+      && lower_last_.rank() + 1 == upper_last_.rank());
+  last_same_color_not_suit_ = (lower_last_.suit()
                                == upper_last_.same_color_suit());
 }
 
@@ -299,12 +300,12 @@ string AgnesState::ToUncompStr() const {
     retoss << "#";
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
       if (it != pile.exposed.begin()) { retoss << "-"; }
-      retoss << std::to_string((it->suit)*kNRank+(it->rank));
+      retoss << std::to_string((it->suit())*kNRank+(it->rank()));
     }
     retoss << "#";
     for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
       if (it != pile.hidden.begin()) { retoss << "-"; }
-      retoss << std::to_string((it->suit)*kNRank+(it->rank));
+      retoss << std::to_string((it->suit())*kNRank+(it->rank()));
     }
   }
   return retoss.str();
@@ -323,9 +324,8 @@ void AgnesState::UpdateCompStr(bool face_up,
     uint8_t first_card = 128;
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
       // set the first bit to mark the first card in a pile.
-      compstr_.push_back(first_card | (48+(it->suit)*kNRank+(it->rank)));
+      compstr_.push_back(first_card | (48+(it->value())));
       if (first_card) first_card = 0;
-      //retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
     }
     if (first_card) {
       compstr_.push_back(first_card);
@@ -343,8 +343,7 @@ void AgnesState::UpdateCompStr(bool face_up,
     if (!face_up) {
       compstr_.push_back('#');
       for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
-        compstr_.push_back(48+(it->suit)*kNRank+(it->rank));
-        //retoss << std::to_string(48+(it->suit)*kNRank+(it->rank));
+        compstr_.push_back(48+(it->value()));
       }
     }
   }
@@ -361,23 +360,23 @@ void AgnesState::InitBlockGraph(
       // through the hidden pile
       for (PileSizeType j=0; j<pSize; ++j) {
         const Card &card = pile.exposed[pSize-1-j];
-        if (card.rank == 12) {
-          king_found[card.suit] = true;
+        if (card.rank() == 12) {
+          king_found[card.suit()] = true;
         }
         for (int k=0; k<kNSuit; ++k) {
-          if (king_found[k] && ((card.rank<12) || (card.suit !=k))) {
-            graph[k][card.suit] = true;
+          if (king_found[k] && ((card.rank() != 12) || (card.suit() !=k))) {
+            graph[k][card.suit()] = true;
           }
         }
       } // end loop over exposed
       for (PileSizeType j=0; j<hSize; ++j) {
         const Card &card = pile.hidden[hSize-1-j];
-        if (card.rank == 12) {
-          king_found[card.suit] = true;
+        if (card.rank() == 12) {
+          king_found[card.suit()] = true;
         }
         for (int k=0; k<kNSuit; ++k) {
-          if (king_found[k] && ((card.rank<12) || (card.suit !=k))) {
-            graph[k][card.suit] = true;
+          if (king_found[k] && ((card.rank() != 12) || (card.suit() !=k))) {
+            graph[k][card.suit()] = true;
           }
         }
       } // end loop over piles_.hidden
@@ -415,19 +414,19 @@ int AgnesState::CalculateMaxPossibleScore(const EmptyRule& enum_to_empty_pile) {
     if (pile.exposed.empty()) continue;
     for (int card_index = pile.exposed.size() - 1; card_index >= 0;
          --card_index) {
-      if (pile.exposed[card_index].rank == 12
-          && in_any_cycle[pile.exposed[card_index].suit]) blocked = true;
-      if (blocked) min_rank_blocked[pile.exposed[card_index].suit] =
-        std::min(min_rank_blocked[pile.exposed[card_index].suit],
-                 pile.exposed[card_index].rank);
+      if (pile.exposed[card_index].rank() == 12
+          && in_any_cycle[pile.exposed[card_index].suit()]) blocked = true;
+      if (blocked) min_rank_blocked[pile.exposed[card_index].suit()] =
+        std::min(min_rank_blocked[pile.exposed[card_index].suit()],
+                 pile.exposed[card_index].rank());
     }
     for (int card_index = pile.hidden.size() - 1; card_index >= 0;
          --card_index) {
-      if (pile.hidden[card_index].rank == 12
-          && in_any_cycle[pile.hidden[card_index].suit]) blocked = true;
-      if (blocked) min_rank_blocked[pile.hidden[card_index].suit] =
-        std::min(min_rank_blocked[pile.hidden[card_index].suit],
-                 pile.hidden[card_index].rank);
+      if (pile.hidden[card_index].rank() == 12
+          && in_any_cycle[pile.hidden[card_index].suit()]) blocked = true;
+      if (blocked) min_rank_blocked[pile.hidden[card_index].suit()] =
+        std::min(min_rank_blocked[pile.hidden[card_index].suit()],
+                 pile.hidden[card_index].rank());
     }
   }
 
@@ -463,27 +462,27 @@ void AgnesState::set_n_movable(const int pile_index,
         above_suit = 0;
       }
       else {
-        above_rank = pile[card_index-1].rank;
-        above_suit = pile[card_index-1].suit;
+        above_rank = pile[card_index-1].rank();
+        above_suit = pile[card_index-1].suit();
       }
       // the next two if statements verify that the card starts a
       // sequence of the same color
-      if (!(card.rank - (max_index - card_index)
-          == pile[pile_size-1].rank)) {
+      if (!(card.rank() - (max_index - card_index)
+          == pile[pile_size-1].rank())) {
         break;
       }
 
-      if (!(card.suit == pile[pile_size-1].suit)) {
+      if (!(card.IsSameSuit(pile[pile_size-1]))) {
         if (snm_opts.move_same_suit
-            || !(card.suit % 2 == pile[pile_size-1].suit % 2))  {
+            || !(card.IsSameColor(pile[pile_size-1]))) {
           break;
         }
       }
 
-      bool is_split_same_suit=(above_rank == card.rank + 1
-                   && above_suit == card.suit);
-      bool is_split_same_color=(above_rank == card.rank + 1
-                    && above_suit % 2 == card.suit % 2);
+      bool is_split_same_suit=(above_rank == card.rank() + 1
+                   && above_suit == card.suit());
+      bool is_split_same_color=(above_rank == card.rank() + 1
+                    && above_suit % 2 == card.suit() % 2);
 
       // Lastly, only add to n_movable if we are allowed to split runs
       // (conditional line 1) or the move is not splitting a run
@@ -542,27 +541,27 @@ bool AgnesState::IsDealForced() const {
      // means checking the (rank -1) card is in the foundation, but we
      // also handle the unlikely case that the last 2 cards are in sequence
      if (last_same_suit_seq_) {
-         can_put1 = InFoundation(card1.rank - 1, card1.suit);
+         can_put1 = InFoundation(card1.rank() - 1, card1.suit());
          can_put2 = can_put1;
      }
      else {
-         can_put1 = InFoundation(card1.rank - 1, card1.suit);
-         can_put2 = InFoundation(card2.rank - 1, card2.suit);
+         can_put1 = InFoundation(card1.rank() - 1, card1.suit());
+         can_put2 = InFoundation(card2.rank() - 1, card2.suit());
      }
 
      bool card1_forcable = (can_put1
-             && (InFoundation(card1.rank - 2, card1.same_color_suit())));
+             && (InFoundation(card1.rank() - 2, card1.same_color_suit())));
      bool card2_forcable = (can_put2
-             && (InFoundation(card2.rank - 2, card2.same_color_suit())));
+             && (InFoundation(card2.rank() - 2, card2.same_color_suit())));
      if (card1_forcable && card2_forcable) {
        return true;
      }
      else if (!last_same_color_not_suit_
               || (!card1_forcable && !card2_forcable)) return false;
      else if (card1_forcable && can_put2
-             && (InFoundation(card2.rank - 3, card1.suit))) return true;
+             && (InFoundation(card2.rank() - 3, card1.suit()))) return true;
      else if (card2_forcable && can_put1
-             && (InFoundation(card1.rank - 3, card2.suit))) return true;
+             && (InFoundation(card1.rank() - 3, card2.suit()))) return true;
      else return false;
   }
 }
@@ -611,12 +610,11 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
         expose = false;
         const Card &card_above = piles_[pile_index].exposed[
           len_curr_pile - n_to_move - 1];
-        if (src_card.rank + 1 == card_above.rank
-            && src_card.suit == card_above.suit) {
+        if (src_card.value() + 1 == card_above.value()) {
           tabltype = TablType::Split;
         }
-        if (src_card.rank + 1 == card_above.rank
-            && src_card.same_color_suit() == card_above.suit) {
+        if (src_card.rank() + 1 == card_above.rank()
+            && src_card.IsSameColor(card_above)) {
           src_in_next_suit_seq = true;
         }
       }
@@ -660,42 +658,42 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
             &&
             (((move_to_empty_pile == EmptyRule::Any1
                || (move_to_empty_pile == EmptyRule::High1
-                 && src_card.rank == 12)) && n_to_move == 1)
+                 && src_card.rank() == 12)) && n_to_move == 1)
                || ((move_to_empty_pile == EmptyRule::AnyRun
                 || (move_to_empty_pile == EmptyRule::HighRun
-                  && src_card.rank == 12))))) {
+                  && src_card.rank() == 12))))) {
 
           if (n_stock_left_
               || tabltype != TablType::Split || split_empty_stock
-              || !(InFoundation(last_card.rank - 1,
+              || !(InFoundation(last_card.rank() - 1,
                                last_card.same_color_suit())
                     ||
-                  (InFoundation(last_card.rank - 2,
+                  (InFoundation(last_card.rank() - 2,
                                last_card.same_color_suit())
-                   && InFoundation(last_card.rank - 3,
-                               last_card.suit)))) {
-            reg_move = Move(Moves::InTableau, pile_index, src_card.suit,
+                   && InFoundation(last_card.rank() - 3,
+                               last_card.suit())))) {
+            reg_move = Move(Moves::InTableau, pile_index, src_card.suit(),
               n_to_move, tgt_index, expose, tabltype);
             valid_moves_.push_back(reg_move);
           }
         }
         else if (len_tgt_pile
-            && src_card.rank == (tgt_card.rank-1)
-            && ((src_card.suit % 2) == (tgt_card.suit % 2))) {
-          if (src_card.suit == tgt_card.suit) {
+            && src_card.rank() + 1 == tgt_card.rank()
+            && src_card.IsSameColor(tgt_card)) {
+          if (src_card.IsSameSuit(tgt_card)) {
             tabltype = TablType::Join;
           }
 
           if (n_stock_left_
               || tabltype != TablType::Split || split_empty_stock
-              || !(InFoundation(last_card.rank - 1,
+              || !(InFoundation(last_card.rank() - 1,
                                last_card.same_color_suit())
                     ||
-                  (InFoundation(last_card.rank - 2,
+                  (InFoundation(last_card.rank() - 2,
                                last_card.same_color_suit())
-                   && InFoundation(last_card.rank - 3,
-                               last_card.suit)))) {
-            reg_move = Move(Moves::InTableau, pile_index, src_card.suit,
+                   && InFoundation(last_card.rank() - 3,
+                               last_card.suit())))) {
+            reg_move = Move(Moves::InTableau, pile_index, src_card.suit(),
                 n_to_move, tgt_index, expose, tabltype);
             valid_moves_.push_back(reg_move);
           }
@@ -708,17 +706,18 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
           // Card(src_card.rank - 1, same suit) in foundation at least, but
           // probably more aggressive still. May be done in future
           if (!(n_stock_left_)
-            && !split_empty_stock && tgt_card.suit == src_card.suit
-            && ( InFoundation(src_card.rank, src_card.same_color_suit())
+            && !split_empty_stock && src_card.IsSameSuit(tgt_card)
+            && ( InFoundation(src_card.rank(), src_card.same_color_suit())
               || (!move_same_suit
-                 && ( in_suit_seq_[src_card.rank][src_card.same_color_suit()]
-                    || (src_card.rank<12
-                      && (last_in_pile_[src_card.rank + 1][
+                 && ( in_suit_seq_[src_card.rank()][src_card.same_color_suit()]
+                    || (src_card.rank()<12
+                      && (last_in_pile_[src_card.rank() + 1][
                                         src_card.same_color_suit()]
                           || src_in_next_suit_seq)))))) {
+            //cout << "src_in_next_suit_seq=" << src_in_next_suit_seq << ", last_in_pile(next+1)=" << last_in_pile_[src_card.rank()+1][src_card.same_color_suit()] << '\n';
             force_move = true;
             forced_move = Move(Moves::InTableau, pile_index,
-                src_card.suit, n_to_move, tgt_index, expose,
+                src_card.suit(), n_to_move, tgt_index, expose,
                 tabltype);
           }
         } // else if (len_tgt_pile ...)
@@ -728,12 +727,12 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
     // Move Type 2 - Put card onto foundation
     expose = (len_curr_pile == 1
           && piles_[pile_index].hidden.size());
-    int suit = last_card.suit;
-    if ((last_card.rank-1) == foundation_[suit]
+    int suit = last_card.suit();
+    if ((last_card.rank()-1) == foundation_[suit]
       && (track_threshold <= n_stock_left_
         || !last_move_info[pile_index].depth
         || last_move_info[pile_index].can_move_to_found)) {
-      if (in_suit_seq_[last_card.rank][last_card.suit]) {
+      if (in_suit_seq_[last_card.rank()][last_card.suit()]) {
         tabltype = TablType::Split;
       }
       else {
@@ -743,9 +742,9 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
                       0, 0, expose, tabltype);
       valid_moves_.push_back(reg_move);
       int same_color_suit = ((suit+2)%4);
-      if (InFoundation(last_card.rank - 2, same_color_suit)
+      if (InFoundation(last_card.rank() - 2, same_color_suit)
         || (!(n_stock_left_) && !split_empty_stock
-          && in_suit_seq_[last_card.rank-1][
+          && in_suit_seq_[last_card.rank() - 1][
                      same_color_suit])) {
         force_move = true;
         forced_move = Move(Moves::ToFoundation, pile_index, suit,
@@ -766,12 +765,12 @@ void AgnesState::UndoDealForPile(int pile_index) {
 
   assert(!pile.exposed.empty());
 
-  in_suit_seq_[last_card.rank][last_card.suit] = false;
-  last_in_pile_[last_card.rank][last_card.suit] = false;
+  in_suit_seq_[last_card.rank()][last_card.suit()] = false;
+  last_in_pile_[last_card.rank()][last_card.suit()] = false;
   pile.exposed.pop_back();
   if (pile.exposed.size()) {
     Card& new_last_card = pile.exposed.back();
-    last_in_pile_[new_last_card.rank][new_last_card.suit] = true;
+    last_in_pile_[new_last_card.rank()][new_last_card.suit()] = true;
   }
   ++n_stock_left_;
 }
@@ -785,14 +784,13 @@ void AgnesState::DealOntoPile(int pile_index, const Deck &deck,
   if (face_up) {
     if (pile.exposed.size()) {
       Card& last_card = pile.exposed.back();
-      if ((card.rank + 1 == last_card.rank)
-          && (card.suit == last_card.suit)) {
-        in_suit_seq_[card.rank][card.suit] = true;
+      if (card.value() + 1 == last_card.value()) {
+        in_suit_seq_[card.rank()][card.suit()] = true;
       }
-      last_in_pile_[last_card.rank][last_card.suit] = false;
+      last_in_pile_[last_card.rank()][last_card.suit()] = false;
     }
     pile.exposed.push_back(card);
-    last_in_pile_[card.rank][card.suit] = true;
+    last_in_pile_[card.rank()][card.suit()] = true;
   }
   else {
     pile.hidden.push_back(card);
@@ -801,9 +799,9 @@ void AgnesState::DealOntoPile(int pile_index, const Deck &deck,
 }
 
 void AgnesState::PlayBaseCard(const Card &card) {
-  foundation_[card.suit]=0;
-  last_in_pile_[0][card.suit]=true;
-  in_suit_seq_[0][card.suit]=true;
+  foundation_[card.suit()]=0;
+  last_in_pile_[0][card.suit()]=true;
+  in_suit_seq_[0][card.suit()]=true;
   --n_stock_left_;
 }
 
@@ -822,7 +820,7 @@ void AgnesState::MoveToFoundation(const Move & curr_move,
   // retrieve card and then destroy it
   last_card = piles_[curr_move.from].exposed.back();
   piles_[curr_move.from].exposed.pop_back();
-  ++foundation_[last_card.suit];
+  ++foundation_[last_card.suit()];
   if (curr_move.expose) {
     piles_[curr_move.from].exposed.push_back(
         piles_[curr_move.from].hidden.back());
@@ -831,14 +829,14 @@ void AgnesState::MoveToFoundation(const Move & curr_move,
 
   if (piles_[curr_move.from].exposed.size()) {
     Card & new_last_card = piles_[curr_move.from].exposed.back();
-    last_in_pile_[new_last_card.rank][new_last_card.suit] = true;
+    last_in_pile_[new_last_card.rank()][new_last_card.suit()] = true;
   }
 
   set_n_movable(curr_move.from, snm_opts);
   last_move_info[curr_move.from] = LastMoveInfo();
 
   if (curr_move.tabltype == TablType::None) {
-    in_suit_seq_[last_card.rank][last_card.suit] = true;
+    in_suit_seq_[last_card.rank()][last_card.suit()] = true;
   }
   // update sort order only if we emptied first pile
   if (!piles_[curr_move.from].exposed.size()) {
@@ -855,11 +853,11 @@ void AgnesState::UndoMoveToFoundation(const Move & curr_move,
   --depth_;
   Card last_card (foundation_[curr_move.suit], curr_move.suit);
   if (curr_move.tabltype == TablType::None) {
-    in_suit_seq_[last_card.rank][last_card.suit] = false;
+    in_suit_seq_[last_card.rank()][last_card.suit()] = false;
   }
   if (!piles_[curr_move.from].exposed.empty()) {
     Card& card_to_hide = piles_[curr_move.from].exposed.back();
-    last_in_pile_[card_to_hide.rank][card_to_hide.suit] = false;
+    last_in_pile_[card_to_hide.rank()][card_to_hide.suit()] = false;
   }
   if (curr_move.expose) {
     piles_[curr_move.from].hidden.push_back(
@@ -954,20 +952,20 @@ void AgnesState::UndoTableauMove(const Move & curr_move,
 
   Card & top_card = from_pile[len_from_pile - curr_move.n_cards];
   if (curr_move.tabltype == TablType::Join) {
-    in_suit_seq_[top_card.rank][top_card.suit] = false;
+    in_suit_seq_[top_card.rank()][top_card.suit()] = false;
   }
   else if (curr_move.tabltype == TablType::Split) {
-    in_suit_seq_[top_card.rank][top_card.suit] = true;
+    in_suit_seq_[top_card.rank()][top_card.suit()] = true;
   }
 
   if (len_from_pile != curr_move.n_cards) {
     Card& prev_card = from_pile[len_from_pile - curr_move.n_cards - 1];
-    last_in_pile_[prev_card.rank][prev_card.suit] = true;
+    last_in_pile_[prev_card.rank()][prev_card.suit()] = true;
   }
 
   if (len_to_pile) {
-    last_in_pile_[to_pile[len_to_pile-1].rank][
-                  to_pile[len_to_pile-1].suit] = false;
+    last_in_pile_[to_pile[len_to_pile-1].rank()][
+                  to_pile[len_to_pile-1].suit()] = false;
   }
 
   // if putting card back on empty pile, need to update the sort order
@@ -1011,19 +1009,19 @@ void AgnesState::TableauMove(const Move & curr_move,
   // update last_in_pile before we move.
   if (from_pile.size() != curr_move.n_cards) {
     Card& prev_card = from_pile[from_pile.size() - curr_move.n_cards - 1];
-    last_in_pile_[prev_card.rank][prev_card.suit] = true;
+    last_in_pile_[prev_card.rank()][prev_card.suit()] = true;
   }
   if (to_pile.size()) {
-    last_in_pile_[to_pile[to_pile.size() - 1].rank][
-                  to_pile[to_pile.size() - 1].suit] = false;
+    last_in_pile_[to_pile[to_pile.size() - 1].rank()][
+                  to_pile[to_pile.size() - 1].suit()] = false;
   }
 
   Card & top_card = from_pile[from_pile.size() - curr_move.n_cards];
   if (curr_move.tabltype == TablType::Join) {
-    in_suit_seq_[top_card.rank][top_card.suit] = true;
+    in_suit_seq_[top_card.rank()][top_card.suit()] = true;
   }
   else if (curr_move.tabltype == TablType::Split) {
-    in_suit_seq_[top_card.rank][top_card.suit] = false;
+    in_suit_seq_[top_card.rank()][top_card.suit()] = false;
   }
 
   Card & last_card = from_pile.back();
@@ -1037,7 +1035,7 @@ void AgnesState::TableauMove(const Move & curr_move,
   last_move_info[curr_move.to].n_moved = curr_move.n_cards;
   last_move_info[curr_move.to].moved_to = true;
   last_move_info[curr_move.to].can_move_to_found = (
-    !(foundation_[last_card.suit] == last_card.rank - 1));
+    !(foundation_[last_card.suit()] == last_card.rank() - 1));
 
   int size_tgt_pre = to_pile.size();
   for (int n_to_pop=-1*curr_move.n_cards; n_to_pop < 0; ++n_to_pop) {
@@ -1071,24 +1069,24 @@ bool pile_less(int n_stock_left, int int_left, const AgnesPile &left,
     int val_left;
     int val_right;
     if (left.hidden.size()) {
-      val_left = left.hidden[0].rank*4+left.hidden[0].suit + 1;
+      val_left = left.hidden[0].value();
     }
     else if (left.exposed.size()) {
-      val_left = left.exposed[0].rank*4+left.exposed[0].suit + 1;
+      val_left = left.exposed[0].value();
     }
     else {
-      val_left = 60;
+      val_left = 90;
     }
     if (right.hidden.size()) {
-      val_right = right.hidden[0].rank*4+right.hidden[0].suit + 1;
+      val_right = right.hidden[0].value();
     }
     else if (right.exposed.size()) {
-      val_right = right.exposed[0].rank*4+right.exposed[0].suit + 1;
+      val_right = right.exposed[0].value();
     }
     else {
-      val_right = 60;
+      val_right = 90;
     }
-    if (val_left == 60 && val_right == 60) {
+    if (val_left == 90 && val_right == 90) {
       return (int_left < int_right);
     }
     else {
@@ -1204,16 +1202,49 @@ void AgnesState::PrintTableau() const {
     for (auto it = piles_[i].hidden.begin();
           it != piles_[i].hidden.end(); ++it) {
       if (it != piles_[i].hidden.begin()) { cout << ", " ; }
-      cout << "(" << it->rank << ", " << it->suit << ")";
+      cout << "(" << it->rank() << ", " << it->suit() << ")";
     }
     cout << "] | [";
     for (auto it = piles_[i].exposed.begin();
           it != piles_[i].exposed.end(); ++it) {
       if (it != piles_[i].exposed.begin()) { cout << ", " ; }
-      cout << "(" << it->rank << ", " << it->suit << ")";
+      cout << "(" << it->rank() << ", " << it->suit() << ")";
     }
     cout << "]" << "\n";
   }
+}
+
+void Card::set_value(int rank, int suit) {
+  value_ = suit*16 + rank;
+}
+
+bool Card::IsSameSuit(Card& other) const {
+  return (other.value_ >> 4) == (value_ >> 4);
+}
+
+bool Card::IsSameColor(Card& other) const {
+  return (other.value_ & 0x10) == (value_ & 0x10);
+}
+
+bool Card::IsSameColor(const Card& other) const {
+  return (other.value_ & 0x10) == (value_ & 0x10);
+}
+
+int Card::rank() const {
+  return value_ & 0x0F;
+}
+
+uint8_t Card::value() const {
+  return value_;
+}
+
+int Card::suit() const {
+  return value_ >> 4;
+}
+
+// return (((value_ >> 4) + 2) % 4) is faster??
+int Card::same_color_suit() const {
+  return (value_ ^ 0x20) >> 4;
 }
 
 } // namespace quagnes
