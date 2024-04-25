@@ -58,6 +58,16 @@
 //   empty (ie, n_stock_left == 0 or (n_stock_left == 2 and pile_index > 1),
 //   no longer write markers for empty piles.
 // [20230423] Made Card a class. Move function definitions to this file.
+// [20230424] (1) Bug fixes for when face_up is false (a) last_in_pile was not
+//   being set to true when moving last card from exposed pile with non-empty
+//   hidden pile; (b) `set_valid_moves` when moving to empty pile, moving all
+//   exposed cards should always be allowed when hidden pile is not empty
+//   (2) Creation of `compstr`. (a) write string for hidden piles like we do
+//   for exposed piles, but only add 1 to the card value instead of 48 so
+//   that 1+value <= 63 and we can use the two highest bits to indicate the
+//   first card in exposed and hidden piles, respectively (b) In cases when an
+//   empty exposed pile was not the last empty exposed pile, the byte indicating
+//   an empty pile was written twice.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -321,14 +331,14 @@ void AgnesState::UpdateCompStr(bool face_up,
     //for (const AgnesPile& pile : piles_) {
     AgnesPile& pile = piles_[sort_order_[pile_index]];
     //AgnesPile& pile = piles_[pile_index];
-    uint8_t first_card = 128;
+    uint8_t first_card = 0x80;
     for (auto it = pile.exposed.begin(); it != pile.exposed.end(); ++it) {
       // set the first bit to mark the first card in a pile.
-      compstr_.push_back(first_card | (48+(it->value())));
+      compstr_.push_back(first_card | (1 + it->value()));
       if (first_card) first_card = 0;
     }
     if (first_card) {
-      compstr_.push_back(first_card);
+      //compstr_.push_back(first_card);
       // piles are sorted so that all empty piles are at the end when they
       // cannot be covered by a future deal. When this occurs, we can break
       // as we know all future piles must be empty.
@@ -341,9 +351,13 @@ void AgnesState::UpdateCompStr(bool face_up,
       }
     }
     if (!face_up) {
-      compstr_.push_back('#');
+      first_card = 0x40;
       for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
-        compstr_.push_back(48+(it->value()));
+        compstr_.push_back(first_card | (1 + it->value()));
+        if (first_card) first_card = 0;
+      }
+      if (first_card) {
+        compstr_.push_back(first_card);
       }
     }
   }
@@ -407,7 +421,7 @@ int AgnesState::CalculateMaxPossibleScore(const EmptyRule& enum_to_empty_pile) {
       }
     }
   }
-  
+
   for (const AgnesPile& pile: piles_) {
     bool blocked = false;
 
@@ -652,6 +666,7 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
         // can be covered by a future deal.
         if (!len_tgt_pile
           && (n_to_move != len_curr_pile
+            || !piles_[pile_index].hidden.empty()
             || (n_to_move == len_curr_pile
               && (tgt_index < n_stock_left_
                 || pile_index < n_stock_left_)))
@@ -1011,6 +1026,11 @@ void AgnesState::TableauMove(const Move & curr_move,
     Card& prev_card = from_pile[from_pile.size() - curr_move.n_cards - 1];
     last_in_pile_[prev_card.rank()][prev_card.suit()] = true;
   }
+  else if (curr_move.expose) {
+    Card& prev_card = piles_[curr_move.from].hidden.back();
+    last_in_pile_[prev_card.rank()][prev_card.suit()] = true;
+  }
+
   if (to_pile.size()) {
     last_in_pile_[to_pile[to_pile.size() - 1].rank()][
                   to_pile[to_pile.size() - 1].suit()] = false;

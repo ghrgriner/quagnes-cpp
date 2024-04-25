@@ -255,9 +255,9 @@ cat("", file=output.file)
 print_table_header()
 
 # Directory for regular results
-rdir = "../../notgit/v1.1.0/tests/"
+rdir = "../tests/results/"
 # Directory for results using `maximize_score=true`
-mdir = "../tests/max_10k/"
+mdir = "../tests/results/"
 
 #-------------------------------------------------------------------------------
 # First do some manual work for the Up-Color-HighRun rules, which has a few
