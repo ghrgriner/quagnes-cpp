@@ -64,6 +64,7 @@ const int kNRank = 13;
 const int kNToTrack = 100;
 const int kNPile = 7;
 const int kNCard = 52;
+const int kNSymbol = 64;
 
 // A playing card.
 class Card {
@@ -191,6 +192,7 @@ class AgnesState {
     // Compressed string representation of the state.
     // Stored in `Agnes.losing_states` attribute.
     void UpdateCompStr(bool face_up, EmptyRule enum_to_empty_pile);
+    void UpdateSymbolCounts(bool face_up, EmptyRule enum_to_empty_pile);
     // Uncompressed string representation of the state used in Print().
     std::string ToUncompStr() const;
     AgnesState(const AgnesState& other) = default;
@@ -212,7 +214,10 @@ class AgnesState {
     std::vector<Move> valid_moves() const;
     bool is_loop() const;
     bool is_loser() const;
-    std::string compstr() const;
+    std::vector<char> compstr() const;
+    uint64_t cum_length() const;
+    std::array<uint64_t, kNSymbol> cum_symbol_count0() const;
+    std::array<uint64_t, kNSymbol> cum_symbol_count1() const;
 
     // simple setters
     void ClearValidMoves();
@@ -509,7 +514,7 @@ class AgnesState {
     // stores whether a state has been identified as a loop
     bool is_loop_;
     bool is_loser_;
-    std::string compstr_;
+    std::vector<char> compstr_;
     // 20240413
     // Next four variables have information used in the is_deal_forced column
     // it seems likely more efficient to calculate once and retrieve rather
@@ -525,6 +530,16 @@ class AgnesState {
     bool last_same_color_not_suit_;
     // indicates listing which piles
     std::array<int, kNPile> sort_order_;
+    // Sum of lengths stored in losing-states set.
+    uint64_t cum_length_;
+    // Frequency each symbol is stored in losing-states set. Symbols are:
+    // each of the 52 cards, an end-of-pile marker, and an end-of-tableau marker
+    // (since sometimes we can avoid writing all 7 piles). The count1_ variable
+    // adds two symbols that indicate whether a card is in sequence under a
+    // card of the same suit or color. However, the kNSymbol is set a little
+    // larger so that the card value can be used as the index.
+    std::array<uint64_t, kNSymbol> cum_symbol_count0_;
+    std::array<uint64_t, kNSymbol> cum_symbol_count1_;
 
     void set_sort_order(EmptyRule move_to_empty_pile);
     void PrintTableau() const;
