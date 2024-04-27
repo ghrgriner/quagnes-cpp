@@ -28,6 +28,7 @@
 // [20240421RG] Add `max_possible_score` stack as attribute.
 // [20240422RG] Make `check_loops_` and `losing_states_` unordered sets instead
 //   of sets.
+// [20240426RG] Add `print_memory` input paramer and attribute.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
@@ -85,6 +86,9 @@ const StatesType kNStatesMax = UINT64_MAX;
 //  print_states : boolean, optional (default = False)
 //      Print game states as moves are made. See `Agnes.print_history`
 //      for output format.
+//  print_memory : boolean, optional (default = False)
+//      Print information useful for estimating memory utilization to
+//      standard output.
 //  maximize_score : boolean, optional (default = False)
 //      Determine the maximum score. Disables the algorithm used when
 //      `move_to_empty_pile == 'none'` that stops playing the game
@@ -112,6 +116,7 @@ struct AgnesOptions {
   bool face_up = false;
   bool maximize_score = false;
   bool print_states = false;
+  bool print_memory = false;
   StatesType max_states = 0;
 };
 
@@ -155,6 +160,8 @@ struct AgnesOptions {
 //    track_threshold : boolean
 //        Stores value of input option with the same name
 //    print_states : bool
+//        Stores value of input option with the same name
+//    print_memory : bool
 //        Stores value of input option with the same name
 //    test_deck : bool
 //        Stores value of input option with the same name
@@ -201,6 +208,7 @@ class Agnes {
     StatesType n_move_to_foundation() const;
     StatesType n_no_move_possible() const;
     int max_depth() const;
+    uint64_t n_losing_states() const;
     std::string move_to_empty_pile() const;
     bool move_same_suit() const;
     bool print_states() const;
@@ -210,8 +218,12 @@ class Agnes {
     bool face_up() const;
     int current_depth() const;
     int max_score() const;
+    bool print_memory() const;
     Agnes(const Agnes& other) = default;
     Agnes& operator=(const Agnes& other) = default;
+    uint64_t cum_length() const;
+    std::array<uint64_t, kNSymbol> cum_symbol_count0() const;
+    std::array<uint64_t, kNSymbol> cum_symbol_count1() const;
 
   private:
     std::string deck_filename_;
@@ -222,6 +234,7 @@ class Agnes {
     bool face_up_;
     bool maximize_score_;
     bool print_states_;
+    bool print_memory_;
     StatesType max_states_;
     StatesType n_states_checked_;
     StatesType n_deal_;
@@ -254,10 +267,10 @@ class Agnes {
     std::stack<std::array<LastMoveInfo, kNPile>> all_lmi_;
     // Set containing game states that have been observed in the current path
     // through the game in order to prevent loops.
-    std::unordered_set<std::string> check_loops_;
+    std::set<std::vector<char> > check_loops_;
     // Set containing game states that are known to be losers. This can get
     // quite large.
-    std::unordered_set<std::string> losing_states_;
+    std::set<std::vector<char> > losing_states_;
 
     // convert move_to_empty_pile_ to an enum
     EmptyRule enum_to_empty_pile_;

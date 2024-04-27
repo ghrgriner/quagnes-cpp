@@ -67,6 +67,7 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
       face_up_(agnes_options.face_up),
       maximize_score_(agnes_options.maximize_score),
       print_states_(agnes_options.print_states),
+      print_memory_(agnes_options.print_memory),
       max_states_(agnes_options.max_states),
       n_states_checked_(1) ,
       n_deal_(1),
@@ -299,6 +300,22 @@ int Agnes::max_score() const {
   return max_score_;
 }
 
+uint64_t Agnes::cum_length() const {
+  return curr_state_.cum_length();
+}
+uint64_t Agnes::n_losing_states() const {
+  return losing_states_.size();
+}
+
+
+std::array<uint64_t, kNSymbol> Agnes::cum_symbol_count0() const {
+  return curr_state_.cum_symbol_count0();
+}
+
+std::array<uint64_t, kNSymbol> Agnes::cum_symbol_count1() const {
+  return curr_state_.cum_symbol_count1();
+}
+
 //------------------------------------------------------------------------------
 // Private functions
 //------------------------------------------------------------------------------
@@ -383,7 +400,10 @@ int Agnes::PerformMove()
     //if (curr_state_.n_stock_left() >= track_threshold_) {
     if (curr_state_.n_stock_left() >= track_threshold_
         && !curr_state_.is_loser()) {
-      losing_states_.insert(curr_state_.compstr());
+      auto ret = losing_states_.insert(curr_state_.compstr());
+      if (print_memory_ && ret.second) {
+        curr_state_.UpdateSymbolCounts(face_up_, enum_to_empty_pile_); 
+      }
     }
     ++n_no_move_possible_;
     UndoMove(false);

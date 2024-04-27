@@ -209,8 +209,10 @@ AgnesState::AgnesState()
       //sort_order_(),
       is_loop_(false),
       is_loser_(false),
-      compstr_()
+      compstr_(),
+      cum_length_(0)
 {
+  // TODO: check how to initialize these in constructor arg list
   for (std::size_t i=0; i<foundation_.size(); ++i) {
     foundation_[i]=-1;
   }
@@ -223,6 +225,8 @@ AgnesState::AgnesState()
       last_in_pile_[i][j] = false;
     }
   }
+  cum_symbol_count0_.fill(0);
+  cum_symbol_count1_.fill(0);
 }
 
 void AgnesState::SetLastCards(const std::array<Card, kNCard> & deck) {
@@ -261,8 +265,20 @@ bool AgnesState::is_loser() const {
   return is_loser_;
 }
 
-string AgnesState::compstr() const {
+std::vector<char> AgnesState::compstr() const {
   return compstr_;
+}
+
+uint64_t AgnesState::cum_length() const {
+  return cum_length_;
+}
+
+std::array<uint64_t, kNSymbol> AgnesState::cum_symbol_count0() const {
+  return cum_symbol_count0_;
+}
+
+std::array<uint64_t, kNSymbol> AgnesState::cum_symbol_count1() const {
+  return cum_symbol_count1_;
 }
 
 // Simple setters
@@ -362,6 +378,65 @@ void AgnesState::UpdateCompStr(bool face_up,
     }
   }
 }
+
+void AgnesState::UpdateSymbolCounts(bool face_up,
+                               EmptyRule enum_to_empty_pile) {
+  for (PileSizeType pile_index=0; pile_index<kNPile; ++pile_index) {
+    std::vector<Card>::iterator prev;
+    AgnesPile& pile = piles_[sort_order_[pile_index]];
+    uint8_t first_card = 0x80;
+    for (auto it = pile.exposed.begin(); it != pile.exposed.end(); prev = it, ++it) {
+      ++cum_symbol_count0_[it->value()];
+      if (first_card) {
+        first_card = 0;
+        ++cum_symbol_count1_[it->value()];
+      }
+      else if (prev->value() +1 == it->value()) {
+        ++cum_symbol_count1_[29];
+      }
+      else if (prev->rank() +1 == it->rank() && it->IsSameColor(*prev)) {
+        ++cum_symbol_count1_[30];
+      }
+      else ++cum_symbol_count1_[it->value()];
+    }
+    if (first_card) {
+      if ((!n_stock_left_ || (n_stock_left_ == 2 && pile_index>1))
+          && enum_to_empty_pile != EmptyRule::None) {
+        break;
+      }
+    }
+    else {
+      ++cum_symbol_count0_[13];
+      ++cum_symbol_count1_[13];
+    }
+    
+    if (!face_up && !first_card) {
+      first_card = 0x40;
+      for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
+        ++cum_symbol_count0_[it->value()];
+        if (first_card) {
+          first_card = 0;
+          ++cum_symbol_count1_[it->value()];
+        }
+        else if (prev->value() +1 == it->value()) {
+          ++cum_symbol_count1_[29];
+        }
+        else if (prev->rank() +1 == it->rank() && it->IsSameColor(*prev)) {
+          ++cum_symbol_count1_[30];
+        }
+        else ++cum_symbol_count1_[it->value()];
+      }
+      if (first_card) {
+        ++cum_symbol_count0_[14];
+        ++cum_symbol_count1_[14];
+      }
+    }
+  }
+  //++cum_symbol_count0_[15];
+  //++cum_symbol_count1_[15];
+  cum_length_ += compstr_.size();
+}
+
 
 void AgnesState::InitBlockGraph(
     std::array<std::array<bool, kNSuit>, kNSuit> &graph) const {
