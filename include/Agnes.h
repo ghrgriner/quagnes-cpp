@@ -267,10 +267,10 @@ class Agnes {
     std::stack<std::array<LastMoveInfo, kNPile>> all_lmi_;
     // Set containing game states that have been observed in the current path
     // through the game in order to prevent loops.
-    std::set<ArraySix> check_loops_;
+    std::unordered_set<ArraySix, ArraySix_hash> check_loops_;
     // Set containing game states that are known to be losers. This can get
     // quite large.
-    std::set<ArraySix> losing_states_;
+    std::unordered_set<ArraySix, ArraySix_hash> losing_states_;
 
     // convert move_to_empty_pile_ to an enum
     EmptyRule enum_to_empty_pile_;
