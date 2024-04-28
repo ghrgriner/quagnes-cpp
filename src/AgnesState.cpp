@@ -387,7 +387,6 @@ void AgnesState::UpdateCompStr(bool face_up,
 }
 */
 
-/*
 void AgnesState::PushToBitset(int &pos, uint8_t value) {
   int stop_pos = pos + 6;
   while (pos < stop_pos) {
@@ -396,11 +395,13 @@ void AgnesState::PushToBitset(int &pos, uint8_t value) {
     ++pos;
   }
 }
-*/
+
+/*
 void AgnesState::PushToBitset(int &pos, uint8_t value) {
   compstr_.set_pos(pos, value);
   ++pos;
 }
+*/
 
 // version of UpdateCompStr for use with std::bitset<48*8> and ArraySix
 void AgnesState::UpdateCompStr(bool face_up,
