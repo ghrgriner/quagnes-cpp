@@ -68,6 +68,11 @@
 //   first card in exposed and hidden piles, respectively (b) In cases when an
 //   empty exposed pile was not the last empty exposed pile, the byte indicating
 //   an empty pile was written twice.
+// [20230428] (1) UpdateSymbolCounts: correction to counts for symbols 29 and
+//   30. Was checking whether card above was one rank lower instead of one rank
+//   higher. (2) Add member functions for `ArraySix` class. (3) Create version
+//   of `UpdateCompStr` for testing with std::bitset and ArraySix, as well as
+//   `PushToBitset` helper function for each class.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -265,7 +270,7 @@ bool AgnesState::is_loser() const {
   return is_loser_;
 }
 
-std::vector<char> AgnesState::compstr() const {
+StateForSet AgnesState::compstr() const {
   return compstr_;
 }
 
@@ -337,6 +342,8 @@ string AgnesState::ToUncompStr() const {
   return retoss.str();
 }
 
+/*
+// version of UpdateCompStr for use with str, std::array, and std::vector
 void AgnesState::UpdateCompStr(bool face_up,
                                EmptyRule enum_to_empty_pile) {
   compstr_.clear();
@@ -378,6 +385,58 @@ void AgnesState::UpdateCompStr(bool face_up,
     }
   }
 }
+*/
+
+/*
+void AgnesState::PushToBitset(int &pos, uint8_t value) {
+  int stop_pos = pos + 6;
+  while (pos < stop_pos) {
+    compstr_[pos] = 0x20 & value;
+    value = value << 1;
+    ++pos;
+  }
+}
+*/
+void AgnesState::PushToBitset(int &pos, uint8_t value) {
+  compstr_.set_pos(pos, value);
+  ++pos;
+}
+
+// version of UpdateCompStr for use with std::bitset<48*8> and ArraySix
+void AgnesState::UpdateCompStr(bool face_up,
+                               EmptyRule enum_to_empty_pile) {
+  compstr_.reset();
+  int pos = 0;
+  PushToBitset(pos, n_stock_left_);
+
+  for (PileSizeType pile_index=0; pile_index<kNPile; ++pile_index) {
+    AgnesPile& pile = piles_[sort_order_[pile_index]];
+    bool found_card = false;
+    for (Card& card : pile.exposed) {
+      PushToBitset(pos, card.value()+1);
+      found_card = true;
+    }
+    PushToBitset(pos, 14);
+
+    if (!found_card && (!n_stock_left_ || (n_stock_left_ == 2 && pile_index>1))
+        && enum_to_empty_pile != EmptyRule::None) break;
+
+    if (!face_up) {
+      for (Card& card : pile.hidden) {
+        PushToBitset(pos, card.value()+1);
+      }
+      // (a) do not need to write the end-of-pile marker for the hidden pile
+      // when pile_index = 0, as this pile is always empty. Also, when all 51
+      // cards are in the tableau, there is no need to write the final
+      // pile-marker since the only possible next symbol is the end-of-pile
+      // marker. This ensures we only write 64 6-bit symbols and remain under
+      // 48 bytes.
+      if (pile_index && pos < 48*8) {
+        PushToBitset(pos, 15);
+      }
+    }
+  }
+}
 
 void AgnesState::UpdateSymbolCounts(bool face_up,
                                EmptyRule enum_to_empty_pile) {
@@ -391,10 +450,10 @@ void AgnesState::UpdateSymbolCounts(bool face_up,
         first_card = 0;
         ++cum_symbol_count1_[it->value()];
       }
-      else if (prev->value() +1 == it->value()) {
+      else if (prev->value() == it->value() + 1) {
         ++cum_symbol_count1_[29];
       }
-      else if (prev->rank() +1 == it->rank() && it->IsSameColor(*prev)) {
+      else if (prev->rank() == it->rank() + 1 && it->IsSameColor(*prev)) {
         ++cum_symbol_count1_[30];
       }
       else ++cum_symbol_count1_[it->value()];
@@ -409,7 +468,7 @@ void AgnesState::UpdateSymbolCounts(bool face_up,
       ++cum_symbol_count0_[13];
       ++cum_symbol_count1_[13];
     }
-    
+
     if (!face_up && !first_card) {
       first_card = 0x40;
       for (auto it = pile.hidden.begin(); it != pile.hidden.end(); ++it) {
@@ -418,10 +477,10 @@ void AgnesState::UpdateSymbolCounts(bool face_up,
           first_card = 0;
           ++cum_symbol_count1_[it->value()];
         }
-        else if (prev->value() +1 == it->value()) {
+        else if (prev->value() == it->value() + 1) {
           ++cum_symbol_count1_[29];
         }
-        else if (prev->rank() +1 == it->rank() && it->IsSameColor(*prev)) {
+        else if (prev->rank() == it->rank() + 1 && it->IsSameColor(*prev)) {
           ++cum_symbol_count1_[30];
         }
         else ++cum_symbol_count1_[it->value()];
@@ -432,9 +491,6 @@ void AgnesState::UpdateSymbolCounts(bool face_up,
       }
     }
   }
-  //++cum_symbol_count0_[15];
-  //++cum_symbol_count1_[15];
-  cum_length_ += compstr_.size();
 }
 
 
@@ -804,7 +860,6 @@ void AgnesState::set_valid_moves(EmptyRule move_to_empty_pile,
                       && (last_in_pile_[src_card.rank() + 1][
                                         src_card.same_color_suit()]
                           || src_in_next_suit_seq)))))) {
-            //cout << "src_in_next_suit_seq=" << src_in_next_suit_seq << ", last_in_pile(next+1)=" << last_in_pile_[src_card.rank()+1][src_card.same_color_suit()] << '\n';
             force_move = true;
             forced_move = Move(Moves::InTableau, pile_index,
                 src_card.suit(), n_to_move, tgt_index, expose,
@@ -1340,6 +1395,77 @@ int Card::suit() const {
 // return (((value_ >> 4) + 2) % 4) is faster??
 int Card::same_color_suit() const {
   return (value_ ^ 0x20) >> 4;
+}
+
+void ArraySix::reset() {
+  bits_.fill(0);
+}
+
+bool ArraySix::operator<(const ArraySix& right) const {
+  for (int i=0; i<6; ++i) {
+    if (bits_[i] != right.bits_[i]) {
+        return bits_[i] < right.bits_[i];
+    }
+  }
+  return false;
+}
+
+bool ArraySix::operator>(const ArraySix& right) const {
+  for (int i=0; i<6; ++i) {
+    if (bits_[i] != right.bits_[i]) {
+        return bits_[i] > right.bits_[i];
+    }
+  }
+  return false;
+}
+
+bool ArraySix::operator==(const ArraySix& right) const {
+  return bits_ == right.bits_;
+}
+
+uint8_t ArraySix::get_pos(size_t pos) const {
+  int start_bit = pos*6;
+  int start_long = start_bit / 64;
+  int end_avail = ((start_bit + 6) % 64);
+  if (end_avail == 2) {
+    return (  ((0x0F & bits_[start_long]        ) << 2)
+            & ((0xC0000000 & bits_[start_long+1]) >> 62));
+  }
+  else if (end_avail == 4) {
+    return (  ((0x04 & bits_[start_long]        ) << 4)
+            & ((0xF0000000 & bits_[start_long+1]) >> 60));
+  } else {
+    return ( bits_[start_long] << (start_bit % 64)) >> 58;
+  }
+}
+
+// Preconditions:
+//  1. the 7th and 8th bits of `value` are 0
+//  2. any bits in `bits_` being set are 0 when the function starts
+void ArraySix::set_pos(const size_t pos, const uint8_t value) {
+  int start_bit = pos*6;
+  int start_long = start_bit / 64;
+  int end_avail = ((start_bit + 6) % 64);
+  if (end_avail == 2) {
+    // Set lowest 4 bits of 'start_long' and highest 2 bits of 'start_long+1'
+    bits_[start_long] |= (static_cast<uint64_t>(value) >> 2);
+    bits_[start_long+1] |= (static_cast<uint64_t>(value) << 62);
+  } else if (end_avail == 4) {
+    // Set lowest 2 bits of 'start_long' and highest 4 bits of 'start_long+1'
+    bits_[start_long] |= (static_cast<uint64_t>(value) >> 4);
+    bits_[start_long+1] |= (static_cast<uint64_t>(value) << 60);
+  } else {
+    // All bits are in the uint64_t with index == 'start_long'
+    bits_[start_long] |= (static_cast<uint64_t>(value) << (64 - end_avail));
+  }
+}
+
+void ArraySix::Print() const {
+  for (int i=0; i<64; i++) {
+    if (i>0) cout << " ";
+    cout << static_cast<int>(get_pos(i));
+  }
+  cout << "\n";
 }
 
 } // namespace quagnes
