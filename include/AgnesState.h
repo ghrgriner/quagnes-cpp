@@ -35,25 +35,31 @@
 //   parameter from IsDealForced as we have simplified the logic so that we
 //   no longer force deal if !split_empty_stock and the 1-lower next suit is
 //   in-suit sequence.
-// [20230420] (1a) Change hash_ attribute to compstr_ and UpdateHash to
+// [20240420] (1a) Change hash_ attribute to compstr_ and UpdateHash to
 //   UpdateCompStr since there is no information loss when we compress.
 //   (1b) Build compstr_ using push_back() instead of ostream; (1c) pass
 //   face_up parameter to UpdateCompStr so that we don't waste memory on the
 //   pile-markers of the hidden piles when we know they are empty.
-// [20230421] Add `CalculateMaxPossibleScore` declaration.
-// [20230423] Made Card a class. Added `value` attribute and IsSameSuit()
+// [20240421] Add `CalculateMaxPossibleScore` declaration.
+// [20240423] Made Card a class. Added `value` attribute and IsSameSuit()
 //   and IsSameColor() functions that take a reference to another card as
 //   parameter. The value of the card is now represented in a single uint8_t
 //   instead of an int for rank and suit.
+// [20240428] (1) Add ArraySix class and hash function. (2) Create new typedef
+//   `StateForSet` for the `compstr_` attribute. These objects are also stored
+//   in the `check_loops` and `losing_states` sets in `Agnes` objects. Set the
+//   typedef to `ArraySix` for now. (3) Correct year in change log.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNESSTATE_H
 #define _QUAGNES_AGNESSTATE_H
 
 #include <string>
+#include <cstring>
 #include <vector>
 #include <set>
 #include <stack>
+#include <bitset>
 #include <array>
 #include <cstdint>
 
@@ -117,6 +123,58 @@ struct Move {
      n_cards(n_cards), to(to), expose(expose), tabltype(tabltype) {}
 };
 
+// An array of size 64, where each value is at most 6 bits
+class ArraySix {
+  public:
+    ArraySix() : bits_() {}
+    void reset();
+    uint8_t get_pos(size_t pos) const;
+    void set_pos(const size_t pos, const uint8_t value);
+    bool operator<(const ArraySix& right) const;
+    bool operator>(const ArraySix& right) const;
+    bool operator==(const ArraySix& right) const;
+    void Print() const;
+    const uint64_t *data() const { return bits_.data(); }
+
+  private:
+    std::array<uint64_t, 6> bits_;
+};
+
+//------------------------------------------------------------------------------
+// Implement the hash function `_Hash_bytes` from gcc v12.2.0 (with length
+// hard-coded to 48 bytes and code removed that handles cases when `len` is not
+// divisible by 8.
+//------------------------------------------------------------------------------
+struct ArraySix_hash {
+  inline std::size_t shift_mix(std::size_t v) const {
+    return v ^ (v >> 47);
+  }
+
+  inline std::size_t unaligned_load(const char* p) const {
+    std::size_t result;
+    memcpy(&result, p, sizeof(result));
+    return result;
+  }
+
+  std::size_t operator()(const ArraySix& x) const {
+    static const std::size_t len = 48UL; // length is hard-coded to 48 bytes
+    static const std::size_t seed = static_cast<std::size_t>(0xc70f6907UL);
+    static const std::size_t mul = (((std::size_t) 0xc6a4a793UL) << 32UL)
+                              + (std::size_t) 0x5bd1e995UL;
+    const char* const buf = reinterpret_cast<const char*>(x.data());
+
+    std::size_t hash = seed ^ (len * mul);
+    for (const char* p = buf; p != buf + len; p += 8) {
+        const std::size_t data = shift_mix(unaligned_load(p) * mul) * mul;
+        hash ^= data;
+        hash *= mul;
+    }
+    hash = shift_mix(hash) * mul;
+    hash = shift_mix(hash);
+    return hash;
+  }
+};
+
 // Group the options passed to AgnesState::set_n_movable
 struct SetNMovableOpts {
   bool move_same_suit;
@@ -131,6 +189,9 @@ struct SetNMovableOpts {
 
 // Deck of cards
 typedef std::array<Card, kNCard> Deck;
+// Representation of the tableau state that will be stored in the sets that
+// track losing states and look for loops.
+typedef ArraySix StateForSet;
 
 //------------------------------------------------------------------------------
 // Store information about the last tableau move done for a pile
@@ -192,6 +253,7 @@ class AgnesState {
     // Compressed string representation of the state.
     // Stored in `Agnes.losing_states` attribute.
     void UpdateCompStr(bool face_up, EmptyRule enum_to_empty_pile);
+    void PushToBitset(int &pos, uint8_t value);
     void UpdateSymbolCounts(bool face_up, EmptyRule enum_to_empty_pile);
     // Uncompressed string representation of the state used in Print().
     std::string ToUncompStr() const;
@@ -214,7 +276,7 @@ class AgnesState {
     std::vector<Move> valid_moves() const;
     bool is_loop() const;
     bool is_loser() const;
-    std::vector<char> compstr() const;
+    StateForSet compstr() const;
     uint64_t cum_length() const;
     std::array<uint64_t, kNSymbol> cum_symbol_count0() const;
     std::array<uint64_t, kNSymbol> cum_symbol_count1() const;
@@ -514,7 +576,7 @@ class AgnesState {
     // stores whether a state has been identified as a loop
     bool is_loop_;
     bool is_loser_;
-    std::vector<char> compstr_;
+    StateForSet compstr_;
     // 20240413
     // Next four variables have information used in the is_deal_forced column
     // it seems likely more efficient to calculate once and retrieve rather
