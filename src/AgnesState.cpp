@@ -342,7 +342,7 @@ string AgnesState::ToUncompStr() const {
   return retoss.str();
 }
 
-/*
+
 // version of UpdateCompStr for use with str, std::array, and std::vector
 void AgnesState::UpdateCompStr(bool face_up,
                                EmptyRule enum_to_empty_pile) {
@@ -385,7 +385,7 @@ void AgnesState::UpdateCompStr(bool face_up,
     }
   }
 }
-*/
+
 
 void AgnesState::PushToBitset(int &pos, uint8_t value) {
   int stop_pos = pos + 6;
@@ -404,6 +404,7 @@ void AgnesState::PushToBitset(int &pos, uint8_t value) {
 */
 
 // version of UpdateCompStr for use with std::bitset<48*8> and ArraySix
+/*
 void AgnesState::UpdateCompStr(bool face_up,
                                EmptyRule enum_to_empty_pile) {
   compstr_.reset();
@@ -438,6 +439,7 @@ void AgnesState::UpdateCompStr(bool face_up,
     }
   }
 }
+*/
 
 void AgnesState::UpdateSymbolCounts(bool face_up,
                                EmptyRule enum_to_empty_pile) {
