@@ -2,8 +2,8 @@ obj
 bin
 tests
 notgit
-R
 R/*.Rout
 R/hold*
+R/Rplots.pdf
 R/analysis_output.txt
 RELEASE_NOTES.txt
