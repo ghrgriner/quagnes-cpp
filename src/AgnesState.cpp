@@ -494,6 +494,7 @@ void AgnesState::UpdateSymbolCounts(bool face_up,
       }
     }
   }
+  cum_length_+=compstr_.size();
 }
 
 

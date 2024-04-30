@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
       cout << ",csc1_" << i;
     }
   }
-      
+
   cout << std::endl;
 
   for (int rep=n_to_skip; rep<n_reps; ++rep) {
