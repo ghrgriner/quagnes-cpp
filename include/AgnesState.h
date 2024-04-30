@@ -191,7 +191,7 @@ struct SetNMovableOpts {
 typedef std::array<Card, kNCard> Deck;
 // Representation of the tableau state that will be stored in the sets that
 // track losing states and look for loops.
-typedef std::vector<char> StateForSet;
+typedef std::string StateForSet;
 
 //------------------------------------------------------------------------------
 // Store information about the last tableau move done for a pile
