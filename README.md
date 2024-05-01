@@ -41,11 +41,11 @@ after exceeding the number of game states specified by the `-m` parameter.
 (`rc=3`). See
 [Program Input and Output](https://github.com/ghrgriner/quagnes-cpp/wiki/Program-Input-and-Output)
 for additional output columns and messages printed to standard error for
-release version 1.3.0.
+release version 1.4.0.
 
 ## Game Rules, Program Methodology, and Analysis of Win Rates
 Further details on the game rules, program methodology, and analysis of win
-rates for release version 1.3.0 can be found
+rates for release version 1.4.0 can be found
 [in the wiki](https://github.com/ghrgriner/quagnes-cpp/wiki/Rules,-Methodology,-and-Analysis-of-Win-Rates).
 
 ## Memory Utilization
