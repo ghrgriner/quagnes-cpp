@@ -29,6 +29,10 @@
 // [20240422RG] Make `check_loops_` and `losing_states_` unordered sets instead
 //   of sets.
 // [20240426RG] Add `print_memory` input paramer and attribute.
+// [20240520RG] Add `random_seed` and `burn_in` input parameters and attributes.
+//   Rename `InitializeDeckFromFile` to `InitializeDeck` and remove all
+//   parameters and add logic to generate deck from a random shuffle in addition
+//   to reading from file.
 //------------------------------------------------------------------------------
 
 #ifndef _QUAGNES_AGNES_H
@@ -106,6 +110,12 @@ const StatesType kNStatesMax = UINT64_MAX;
 //      Terminate game with return code 3 when number of states
 //      examined exceeds this threshold.  0 (default) means no
 //      threshold is used.
+// random_seed : uint32_t, optional
+//      If non-zero, single random seed to be passed to std::mt19937 for
+//      randomly shuffling deck instead of reading deck from `deck_filename`.
+// burn_in : uint64_t, optional
+//      If non-zero, burn-in period to use for std::mt19937 (i.e., call
+//      mt19937.discard with this parameter after seeding).
 //------------------------------------------------------------------------------
 struct AgnesOptions {
   std::string deck_filename = "";
@@ -118,6 +128,8 @@ struct AgnesOptions {
   bool print_states = false;
   bool print_memory = false;
   StatesType max_states = 0;
+  uint32_t random_seed = 0;
+  uint64_t burn_in = 0;
 };
 
 //-----------------------------------------------------------------------------
@@ -236,6 +248,8 @@ class Agnes {
     bool print_states_;
     bool print_memory_;
     StatesType max_states_;
+    uint32_t random_seed_;
+    uint64_t burn_in_;
     StatesType n_states_checked_;
     StatesType n_deal_;
     StatesType n_move_card_in_tableau_;
@@ -294,13 +308,15 @@ class Agnes {
     std::stack<int> max_possible_score_;
 
     //-------------------------------------------------------------------------
-    // Read deck from input file, one card per line where card='(rank, suit)'
+    // Initialize deck, either by a random shuffle of 0..51 or from file
     //
-    // Rank = 0, 1, ... 12 and suit = {0, 1, 2, 3} and suits are the same color
-    // if they are equal modulus 2.
+    // If not `random_seed`, initialize deck from random shuffle of 0..51.
+    // Otherwise, read deck from input file, one card per line where
+    // card='(rank, suit)', and Rank = 0, 1, ... 12 and suit = {0, 1, 2, 3} and
+    // suits are the same color if they are equal modulus 2.
     // Return 1 if error, 0 if successful
     //-------------------------------------------------------------------------
-    void InitializeDeckFromFile(const std::string &deck_filename);
+    void InitializeDeck();
 
     //-------------------------------------------------------------------------
     // Perform a move. Calls UndoMove if no possible move.

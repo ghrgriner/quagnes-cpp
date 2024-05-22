@@ -25,7 +25,7 @@ Decks must be created before running the program and be stored in files in a
 directory structure named `decks/oM/deckN.txt`, etc..., where N is a number
 starting at 1 and M = floor(N/1000). See
 [Program Input and Output](https://github.com/ghrgriner/quagnes-cpp/wiki/Program-Input-and-Output)
-for additional details for release version 1.1.0.
+for additional details for release version 1.3.0.
 
 ## Example
 Play 100 games using the rules given by Dalton [1,2].
@@ -49,7 +49,7 @@ rates for release version 1.4.0 can be found
 [in the wiki](https://github.com/ghrgriner/quagnes-cpp/wiki/Rules,-Methodology,-and-Analysis-of-Win-Rates).
 
 ## Memory Utilization
-Details on the memory utilization in release version 1.3.0 as well as 
+Details on the memory utilization in release version 1.4.0 as well as
 memory utilization using alternate data structures can also be found
 [in the wiki](https://github.com/ghrgriner/quagnes-cpp/wiki/Memory-Utilization).
 

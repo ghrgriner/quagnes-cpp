@@ -73,6 +73,8 @@
 //   higher. (2) Add member functions for `ArraySix` class. (3) Create version
 //   of `UpdateCompStr` for testing with std::bitset and ArraySix, as well as
 //   `PushToBitset` helper function for each class.
+// [20230521RG] Use double braces when initializing arrays of arrays to avoid
+//   some compiler warnings in clang++.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -541,9 +543,9 @@ int AgnesState::CalculateMaxPossibleScore(const EmptyRule& enum_to_empty_pile) {
   std::array<int, kNSuit> min_rank_blocked = {13, 13, 13, 13};
 
   {
-    std::array<std::array<bool, kNSuit>, kNSuit> graph = {
-        false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false};
+    std::array<std::array<bool, kNSuit>, kNSuit> graph = {{
+        {false, false, false, false}, {false, false, false, false},
+        {false, false, false, false}, {false, false, false, false}}};
     InitBlockGraph(graph);
 
     {
@@ -586,9 +588,9 @@ int AgnesState::CalculateMaxPossibleScore(const EmptyRule& enum_to_empty_pile) {
 }
 
 bool AgnesState::IsAnyPileBlocked() const {
-  std::array<std::array<bool, kNSuit>, kNSuit> graph = {
-      false, false, false, false, false, false, false, false,
-      false, false, false, false, false, false, false, false};
+  std::array<std::array<bool, kNSuit>, kNSuit> graph = {{
+      {false, false, false, false}, {false, false, false, false},
+      {false, false, false, false}, {false, false, false, false}}};
   InitBlockGraph(graph);
   return cyclic(graph);
 }

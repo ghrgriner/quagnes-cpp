@@ -32,6 +32,7 @@
 // [20240426] - (1) Remove '-r' option from print_usage(), as this was never
 //  implemented. (2) Add '-y' option to print variables useful for estimating
 //  memory utilization. (3) Standardidze leading white-space to 2 from 4.
+// [20240522] (1) Add `-r` and `-b` options for random number generator (RNG)
 //------------------------------------------------------------------------------
 
 #include <unistd.h>
@@ -51,7 +52,7 @@ void print_usage();
 
 void print_usage() {
   std::cerr << "Usage: ./quagnes -n reps [-k n_to_skip] [-e empty] [-u] [-s]";
-  std::cerr << "[-t threshold] [-p] [-f] [-z] [-m n_states] [-h]\n";
+  std::cerr << "[-t threshold] [-p] [-f] [-z] [-m n_states] [-r random_seed] [-b burn_in] [-h]\n";
   std::cerr << "    -n reps: execute the first reps simulations (except those skipped by the -k parameter)\n";
   std::cerr << "    -k n_to_skip (int): skip first n_to_skip simulations\n";
   std::cerr << "    -e empty: define what can be moved to empty tableau piles: {'none', 'high run', 'any run', 'high 1', 'any 1'}\n";
@@ -62,6 +63,8 @@ void print_usage() {
   std::cerr << "    -f: deal all tableau cards face-up instead of just the last card in each column\n";
   std::cerr << "    -z: maximize score by disabling identification of losing games without playing moves (used when '-e none' is specified)\n";
   std::cerr << "    -m n_states: stop processing game after n_states states\n";
+  std::cerr << "    -r random_seed: single seed to pass to std::mt19937 RNG for shuffling deck (default=0 [read shuffled deck from file])\n";
+  std::cerr << "    -b burn_in: burn-in period for std::mt19937 RNG (default=0)\n";
   std::cerr << "    -y: print information useful for estimating memory utilization to standard output\n";
   std::cerr << "    -h: print this help message\n";
 }
@@ -74,7 +77,7 @@ int main(int argc, char *argv[]) {
   int n_to_skip = 0;
 
   while (1) {
-    switch(getopt(argc, argv, "n:d:e:usft:pm:k:yz")) {
+    switch(getopt(argc, argv, "n:d:e:usft:pm:b:r:k:yz")) {
     case 'n':
       n_reps = atoi(optarg);
       continue;
@@ -97,6 +100,14 @@ int main(int argc, char *argv[]) {
 
     case 'f':
       agnes_options.face_up = true;
+      continue;
+
+    case 'b':
+      agnes_options.burn_in = std::stoull(string(optarg));
+      continue;
+
+    case 'r':
+      agnes_options.random_seed = std::stoul(string(optarg));
       continue;
 
     case 'h':
