@@ -7,3 +7,4 @@ R/hold*
 R/Rplots.pdf
 R/analysis_output.txt
 RELEASE_NOTES.txt
+Dockerfile

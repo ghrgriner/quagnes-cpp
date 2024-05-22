@@ -36,6 +36,11 @@
 //   (2) Add enum_to_empty_pile parameter to UpdateCompStr
 // [20230421] Add call to CalculateMaxPossibleScore after a deal (including
 //   initial).
+// [20240520RG] (1) Add `-r` argument and `twister` field in
+//   agnes_options to support generating decks from random shuffles instead of
+//   reading from file. (2) `Agnes.check_for_loops_` was initialized in
+//   initialization list using a variable not defined until constructor body.
+//   Moved initialization to constructor body.
 //------------------------------------------------------------------------------
 
 #include <iostream>
@@ -69,6 +74,8 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
       print_states_(agnes_options.print_states),
       print_memory_(agnes_options.print_memory),
       max_states_(agnes_options.max_states),
+      random_seed_(agnes_options.random_seed),
+      burn_in_(agnes_options.burn_in),
       n_states_checked_(1) ,
       n_deal_(1),
       n_move_card_in_tableau_(0),
@@ -83,10 +90,6 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
       deck_(),
       check_loops_(),
       losing_states_(),
-      // under some combinations of rules, it's not possible to infinitely
-      // loop in the tableau, so we don't need to check for loops
-      check_for_loops_(agnes_options.split_runs
-                       || (enum_to_empty_pile_!= EmptyRule::None)),
       moves_left_(),
       max_possible_score_()
 {
@@ -119,8 +122,12 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
   } else {
       throw std::invalid_argument("move_to_empty_pile must be 'none', 'any 1', 'any run', 'high 1', 'high run'");
   }
+  // under some combinations of rules, it's not possible to infinitely
+  // loop in the tableau, so we don't need to check for loops
+  check_for_loops_ = (agnes_options.split_runs
+                      || (enum_to_empty_pile_!= EmptyRule::None));
 
-  InitializeDeckFromFile(deck_filename_);
+  InitializeDeck();
   if (!max_states_) max_states_guard_ = kNStatesMax;
   else max_states_guard_ = max_states_;
 }
@@ -144,10 +151,23 @@ Agnes::Agnes (const AgnesOptions &agnes_options)
 //  //std::cout << '\n';
 //}
 
-void Agnes::InitializeDeckFromFile(const string &deck_filename) {
+void Agnes::InitializeDeck() {
   std::string line;
-  std::ifstream infile(deck_filename);
-  if (infile) {
+  std::ifstream infile(deck_filename_);
+  static bool initialized = false;
+  static std::mt19937 twister;
+  if (random_seed_) {
+    if (!initialized) {
+      // TODO: allow more than one 32-bit seed
+      twister.seed(random_seed_);
+      twister.discard(burn_in_);
+      initialized = true;
+    }
+    for (std::size_t i=0; i<initial_deck_.size(); ++i) {
+      initial_deck_[i].set_value(i % 13, i / 13);
+    }
+    std::shuffle(initial_deck_.begin(), initial_deck_.end(), twister);
+  } else if (infile) {
     int line_ctr = 0;
     while (std::getline(infile, line))
     {
@@ -158,13 +178,12 @@ void Agnes::InitializeDeckFromFile(const string &deck_filename) {
     }
   }
   else {
-    throw FileNotFoundError(deck_filename);
+    throw FileNotFoundError(deck_filename_);
   }
 }
 
 int Agnes::Play() {
   int i, j;
-  LastMoveInfo empty_lmi;
   array<LastMoveInfo, kNPile> last_move_info;
 
   // reset the indexing of all cards so base card has rank 0
@@ -402,7 +421,7 @@ int Agnes::PerformMove()
         && !curr_state_.is_loser()) {
       auto ret = losing_states_.insert(curr_state_.compstr());
       if (print_memory_ && ret.second) {
-        curr_state_.UpdateSymbolCounts(face_up_, enum_to_empty_pile_); 
+        curr_state_.UpdateSymbolCounts(face_up_, enum_to_empty_pile_);
       }
     }
     ++n_no_move_possible_;
