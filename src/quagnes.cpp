@@ -33,6 +33,10 @@
 //  implemented. (2) Add '-y' option to print variables useful for estimating
 //  memory utilization. (3) Standardidze leading white-space to 2 from 4.
 // [20240522] (1) Add `-r` and `-b` options for random number generator (RNG)
+// [20240523] Bug fix to previous. When rep<n_to_skip, create the `Agnes`
+//  object and run it with one state so that the RNG is advanced the same way
+//  as if the initial reps weren't skipped. (But the output records for these
+//  skipped reps are still not printed.)
 //------------------------------------------------------------------------------
 
 #include <unistd.h>
@@ -75,6 +79,7 @@ int main(int argc, char *argv[]) {
   string rerun_filename;
   quagnes::AgnesOptions agnes_options;
   int n_to_skip = 0;
+  quagnes::StatesType input_max_states = 0;
 
   while (1) {
     switch(getopt(argc, argv, "n:d:e:usft:pm:b:r:k:yz")) {
@@ -120,8 +125,7 @@ int main(int argc, char *argv[]) {
       continue;
 
     case 'm':
-      //max_states = atoi(optarg);
-      agnes_options.max_states = std::stoull(string(optarg));
+      input_max_states = std::stoull(string(optarg));
       continue;
 
     case 'y':
@@ -170,7 +174,16 @@ int main(int argc, char *argv[]) {
 
   cout << std::endl;
 
-  for (int rep=n_to_skip; rep<n_reps; ++rep) {
+  for (int rep=0; rep<n_reps; ++rep) {
+    // Even if it is a rep that we want to skip, we run at least one
+    // state because if deck is shuffled by a RNG, we want to advance
+    // the RNG in the same way as if no skip was done.
+    if (rep < n_to_skip) {
+        if (agnes_options.random_seed) agnes_options.max_states = 1;
+        else continue;
+    }
+    else agnes_options.max_states = input_max_states;
+
     //cout << "Rep: " << rep << endl;
     snprintf(deck_filename_cp, DECK_FILENAME_LEN-1,
        "decks/o%d/deck%d.txt", static_cast<int>(rep/1000), rep+1);
