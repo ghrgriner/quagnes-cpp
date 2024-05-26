@@ -12,6 +12,15 @@
 #   Up-Color-AnyRun rule.
 # [RG20240417] - Add fill.from.nosplit function and use it to fill in some
 #   results for Up-Color-HighRun that were unsolved.
+# [RG20240526] - (1) Bug fix. When n.total != n.completed, denominator should
+#   be n.total, not n.completed, when calculating the worst-possible and 
+#   best-possible proportions. This does not affect the most recent prior
+#   results presented, since n.total == n.completed (2a) The random decks used
+#   in the 10,000 simulations has changed, so the code that somewhat manually
+#   handled the decks that had high memory usage was updated. Further details
+#   are in comments in the code. (2b) All decks are now solved without
+#   disabling the losing-states set, so the actual number of states checked is
+#   presented instead of the censored value.
 #------------------------------------------------------------------------------
 # Need Hmisc for binconf
 library(Hmisc)
@@ -93,7 +102,7 @@ fmt.pval <- function(p.value) {
 }
 
 analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
-                    rule_footnote = NULL, filemax = NULL) {
+                    rule_footnote = NULL, filemax = NULL, datamax=NULL) {
     if (!is.null(file) && !file.exists(file)) {
         stop(paste("analyze: file does not exist: ", file))
     }
@@ -156,11 +165,11 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
         cat(paste0("\nWARNING: Some simulations stopped before completion.\n"))
         cat(paste0("\nAssuming all incomplete simlations are losses:\n"))
         ret.low <- check.prob(x=sum( (df$rc == 1), na.rm=TRUE),
-                   n=n.completed, emptyrule=emptyrule)
+                   n=n.total, emptyrule=emptyrule)
         print(ret.low)
         cat(paste0("\nAssuming all incomplete simlations are wins:\n"))
         ret.high <- check.prob(x=sum( (df$rc == 1) | (df$rc == 3), na.rm=TRUE),
-                   n=n.completed, emptyrule=emptyrule)
+                   n=n.total, emptyrule=emptyrule)
         print(ret.high)
 
         out_str = sprintf("%d (%2.1f%% [%2.1f%%, %2.1f%%], %2.1f%% [%2.1f%%, %2.1f%%])",
@@ -187,8 +196,9 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
     out_str = sprintf("| %.1f", max(stchk)/1000000)
     to_output(formatC(out_str, width=-10))
 
-    if (!is.null(filemax)) {
-        dfmax = read.csv(filemax)
+    if (!is.null(filemax) || !is.null(datamax)) {
+        if (!is.null(datamax)) dfmax = datamax
+        else dfmax = read.csv(filemax)
         score = dfmax$max_score
         stmax = dfmax$n_states_checked
         diff.rc = (dfmax$rc != df$rc)
@@ -208,7 +218,7 @@ analyze <- function(file = NULL, data = NULL, emptyrule = NULL, rule= NULL,
     out_str = sprintf("| %.1f (%.1f) ", mean(score), sd(score))
     to_output(formatC(out_str, width=-14))
 
-    if (!is.null(filemax)) {
+    if (!is.null(filemax) || !is.null(datamax)) {
         cat("\nStates checked (when maximize_score=true):\n")
         cat(paste0("Mean (SD): ", mean(stmax), " (", sd(stmax), ")\n"))
         cat(paste0("Max: ", max(stmax), "\n"))
@@ -260,24 +270,63 @@ rdir = "../tests/results/"
 mdir = "../tests/results/"
 
 #-------------------------------------------------------------------------------
+# Somewhat hard-coding to handle high memory cases. These differ from the
+# previous version as the random decks are all new.
+#
+# The decks were changed to use a random 32-bit number as initial seed
+# (seed=3623748248) with a burn-in of 700000, both of which differ from that
+# previously used. Finally, the shuffling is now done in C++. (Previously the
+# decks were generated using the Python impelmentation, and C++ and Python
+# implement different shuffling algorithms so that even the same choice of seeds
+# and burn-in would give different shuffling results between the two.)
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
 # First do some manual work for the Up-Color-HighRun rules, which has a few
-# cases that are unsolved.
+# simulations that were unsolved at the default maximum number of states /
+# or memory use.
 #-------------------------------------------------------------------------------
 df.up_color_highrun_nosplit = read.csv(paste0(rdir, "up_color_highrun_nosplit.out"))
 df_most = read.csv(paste0(rdir, "up_color_highrun.out"))
 
 df_fill = fill.from.nosplit(df_most, df.up_color_highrun_nosplit)
 
-df.up_color_highrun_5912 = read.csv(paste0(rdir, "up_color_highrun_5912.out"))
-df.up_color_highrun_9901 = read.csv(paste0(rdir, "up_color_highrun_9901.out"))
+df.up_color_highrun_1557 = read.csv(paste0(rdir, "up_color_highrun_1557.out"))
+df.up_color_highrun_2340 = read.csv(paste0(rdir, "up_color_highrun_2340.out"))
+df.up_color_highrun_2896 = read.csv(paste0(rdir, "up_color_highrun_2896.out"))
+df.up_color_highrun_5251 = read.csv(paste0(rdir, "up_color_highrun_5251.out"))
+df.up_color_highrun_8194 = read.csv(paste0(rdir, "up_color_highrun_8194.out"))
+df.up_color_highrun_9332 = read.csv(paste0(rdir, "up_color_highrun_9332.out"))
 
 df.up_color_highrun = rbind(
-    df_fill[df_fill$rep_id != 5912 & df_fill$rep_id != 9901, ],
-    df.up_color_highrun_5912,
-    df.up_color_highrun_9901)
+    df_fill[df_fill$rep_id != 1557 & df_fill$rep_id != 2340 & df_fill$rep_id != 2896 &
+            df_fill$rep_id != 5251 & df_fill$rep_id != 8194 & df_fill$rep_id != 9332, ],
+    df.up_color_highrun_1557, df.up_color_highrun_2340,
+    df.up_color_highrun_2896, df.up_color_highrun_5251,
+    df.up_color_highrun_8194, df.up_color_highrun_9332)
+
+#-------------------------------------------------------------------------------
+# Do the same for Dalton-HighRun rules
+#-------------------------------------------------------------------------------
+df.dalton_highrun_most = read.csv(paste0(rdir, "dalton_highrun.out"))
+df.dalton_highrun_2340 = read.csv(paste0(rdir, "dalton_highrun_2340.out"))
+
+df.dalton_highrun = rbind(
+    df.dalton_highrun_most[df.dalton_highrun_most$rep_id != 2340, ],
+    df.dalton_highrun_2340)
+
+#-------------------------------------------------------------------------------
+# Do the same for Down-Color-None maximum score
+#-------------------------------------------------------------------------------
+df.dcnm_most = read.csv(paste0(rdir, "down_color_none_max.out"))
+df.dcnm_2340 = read.csv(paste0(rdir, "down_color_none_max_2340.out"))
+
+df.down_color_none_max = rbind(
+    df.dcnm_most[df.dcnm_most$rep_id != 2340, ],
+    df.dcnm_2340)
 
 analyze(file=paste0(rdir, "down_color_none.out"),          emptyrule="none",     rule="Down-Color-None",
-        filemax=paste0(mdir, "down_color_none_max.out"))
+        datamax=df.down_color_none_max)
 analyze(file=paste0(rdir, "up_color_none.out"),            emptyrule="none",     rule="Up-Color-None",
         filemax=paste0(mdir, "up_color_none_max.out"))
 analyze(file=paste0(rdir, "up_color_none_nosplit.out"),    emptyrule="none",     rule="Up-Color-None-NoSplit",
@@ -290,7 +339,8 @@ analyze(file=paste0(rdir, "dalton_none.out"),              emptyrule="none",    
         filemax=paste0(mdir, "dalton_none_max.out"))
 analyze(file=paste0(rdir, "parlett.out"),                  emptyrule="none",     rule="Up-Suit-None-NoSplit",
         filemax=paste0(mdir, "parlett_max.out"))
-analyze(file=paste0(rdir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
+analyze(data=df.dalton_highrun,                            emptyrule="high run", rule="Up-Suit-HighRun")
+#analyze(file=paste0(rdir, "dalton_highrun.out"),           emptyrule="high run", rule="Up-Suit-HighRun")
 analyze(file=paste0(rdir, "dalton_highrun_nosplit.out"),   emptyrule="high run", rule="Up-Suit-HighRun-NoSplit")
 analyze(file=paste0(rdir, "dalton_anyrun.out"),            emptyrule="any run",  rule="Up-Suit-AnyRun")
 analyze(file=paste0(rdir, "dalton_anyrun_nosplit.out"),    emptyrule="any run",  rule="Up-Suit-AnyRun-NoSplit")
